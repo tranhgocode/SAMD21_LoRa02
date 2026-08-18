@@ -65,6 +65,45 @@
 // *****************************************************************************
 // *****************************************************************************
 
+/*** Macros for LORA_RESET pin ***/
+#define LORA_RESET_Set()               (PORT_REGS->GROUP[0].PORT_OUTSET = ((uint32_t)1U << 10U))
+#define LORA_RESET_Clear()             (PORT_REGS->GROUP[0].PORT_OUTCLR = ((uint32_t)1U << 10U))
+#define LORA_RESET_Toggle()            (PORT_REGS->GROUP[0].PORT_OUTTGL = ((uint32_t)1U << 10U))
+#define LORA_RESET_OutputEnable()      (PORT_REGS->GROUP[0].PORT_DIRSET = ((uint32_t)1U << 10U))
+#define LORA_RESET_InputEnable()       (PORT_REGS->GROUP[0].PORT_DIRCLR = ((uint32_t)1U << 10U))
+#define LORA_RESET_Get()               (((PORT_REGS->GROUP[0].PORT_IN >> 10U)) & 0x01U)
+#define LORA_RESET_PIN                  PORT_PIN_PA10
+
+/*** Macros for LORA_DIO0 pin ***/
+#define LORA_DIO0_Set()               (PORT_REGS->GROUP[0].PORT_OUTSET = ((uint32_t)1U << 11U))
+#define LORA_DIO0_Clear()             (PORT_REGS->GROUP[0].PORT_OUTCLR = ((uint32_t)1U << 11U))
+#define LORA_DIO0_Toggle()            (PORT_REGS->GROUP[0].PORT_OUTTGL = ((uint32_t)1U << 11U))
+#define LORA_DIO0_OutputEnable()      (PORT_REGS->GROUP[0].PORT_DIRSET = ((uint32_t)1U << 11U))
+#define LORA_DIO0_InputEnable()       (PORT_REGS->GROUP[0].PORT_DIRCLR = ((uint32_t)1U << 11U))
+#define LORA_DIO0_Get()               (((PORT_REGS->GROUP[0].PORT_IN >> 11U)) & 0x01U)
+#define LORA_DIO0_PIN                  PORT_PIN_PA11
+
+/*** Macros for SPI_MOSI pin ***/
+#define SPI_MOSI_Get()               (((PORT_REGS->GROUP[0].PORT_IN >> 16U)) & 0x01U)
+#define SPI_MOSI_PIN                  PORT_PIN_PA16
+
+/*** Macros for SPI_SCK pin ***/
+#define SPI_SCK_Get()               (((PORT_REGS->GROUP[0].PORT_IN >> 17U)) & 0x01U)
+#define SPI_SCK_PIN                  PORT_PIN_PA17
+
+/*** Macros for LORA_NSS pin ***/
+#define LORA_NSS_Set()               (PORT_REGS->GROUP[0].PORT_OUTSET = ((uint32_t)1U << 18U))
+#define LORA_NSS_Clear()             (PORT_REGS->GROUP[0].PORT_OUTCLR = ((uint32_t)1U << 18U))
+#define LORA_NSS_Toggle()            (PORT_REGS->GROUP[0].PORT_OUTTGL = ((uint32_t)1U << 18U))
+#define LORA_NSS_OutputEnable()      (PORT_REGS->GROUP[0].PORT_DIRSET = ((uint32_t)1U << 18U))
+#define LORA_NSS_InputEnable()       (PORT_REGS->GROUP[0].PORT_DIRCLR = ((uint32_t)1U << 18U))
+#define LORA_NSS_Get()               (((PORT_REGS->GROUP[0].PORT_IN >> 18U)) & 0x01U)
+#define LORA_NSS_PIN                  PORT_PIN_PA18
+
+/*** Macros for SPI_MISO pin ***/
+#define SPI_MISO_Get()               (((PORT_REGS->GROUP[0].PORT_IN >> 19U)) & 0x01U)
+#define SPI_MISO_PIN                  PORT_PIN_PA19
+
 /*** Macros for UART_TX pin ***/
 #define UART_TX_Get()               (((PORT_REGS->GROUP[0].PORT_IN >> 22U)) & 0x01U)
 #define UART_TX_PIN                  PORT_PIN_PA22

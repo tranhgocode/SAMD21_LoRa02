@@ -23,8 +23,11 @@
               <itemPath>../src/config/default/peripheral/port/plib_port.h</itemPath>
             </logicalFolder>
             <logicalFolder name="sercom" displayName="sercom" projectFiles="true">
+              <logicalFolder name="spi_master" displayName="spi_master" projectFiles="true">
+                <itemPath>../src/config/default/peripheral/sercom/spi_master/plib_sercom1_spi_master.h</itemPath>
+                <itemPath>../src/config/default/peripheral/sercom/spi_master/plib_sercom_spi_master_common.h</itemPath>
+              </logicalFolder>
               <logicalFolder name="usart" displayName="usart" projectFiles="true">
-                <itemPath>../src/config/default/peripheral/sercom/usart/plib_sercom1_usart.h</itemPath>
                 <itemPath>../src/config/default/peripheral/sercom/usart/plib_sercom_usart_common.h</itemPath>
                 <itemPath>../src/config/default/peripheral/sercom/usart/plib_sercom5_usart.h</itemPath>
               </logicalFolder>
@@ -169,6 +172,9 @@
     <logicalFolder name="SourceFiles"
                    displayName="Source Files"
                    projectFiles="true">
+      <logicalFolder name="app" displayName="app" projectFiles="true">
+        <itemPath>../src/app/lora_app.c</itemPath>
+      </logicalFolder>
       <logicalFolder name="config" displayName="config" projectFiles="true">
         <logicalFolder name="default" displayName="default" projectFiles="true">
           <logicalFolder name="peripheral" displayName="peripheral" projectFiles="true">
@@ -188,8 +194,10 @@
               <itemPath>../src/config/default/peripheral/port/plib_port.c</itemPath>
             </logicalFolder>
             <logicalFolder name="sercom" displayName="sercom" projectFiles="true">
+              <logicalFolder name="spi_master" displayName="spi_master" projectFiles="true">
+                <itemPath>../src/config/default/peripheral/sercom/spi_master/plib_sercom1_spi_master.c</itemPath>
+              </logicalFolder>
               <logicalFolder name="usart" displayName="usart" projectFiles="true">
-                <itemPath>../src/config/default/peripheral/sercom/usart/plib_sercom1_usart.c</itemPath>
                 <itemPath>../src/config/default/peripheral/sercom/usart/plib_sercom5_usart.c</itemPath>
               </logicalFolder>
             </logicalFolder>
@@ -204,9 +212,19 @@
           <itemPath>../src/config/default/libc_syscalls.c</itemPath>
         </logicalFolder>
       </logicalFolder>
+      <logicalFolder name="drivers" displayName="drivers" projectFiles="true">
+        <logicalFolder name="sx1278" displayName="sx1278" projectFiles="true">
+          <itemPath>../src/drivers/sx1278/SX1278.c</itemPath>
+          <itemPath>../src/drivers/sx1278/SX1278_hw.c</itemPath>
+        </logicalFolder>
+      </logicalFolder>
       <itemPath>../src/main.c</itemPath>
     </logicalFolder>
   </logicalFolder>
+  <sourceRootList>
+    <Elem>../src/drivers</Elem>
+    <Elem>../src/app</Elem>
+  </sourceRootList>
   <projectmakefile>Makefile</projectmakefile>
   <confs>
     <conf name="default" type="2">

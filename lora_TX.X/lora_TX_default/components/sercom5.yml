@@ -1,0 +1,142 @@
+configVersion: 1.0.0
+componentName: sercom5
+coreVersion: 5.8.4
+device: ATSAMD21G17D
+library: []
+dependency:
+- dependencyPackage: class com.microchip.mcc.harmony.HarmonyModule
+  name: sercom5
+  type: module
+  version: ''
+- dependencyPackage: ''
+  name: csp
+  type: package
+  version: v3.25.2
+customDataClassName: com.microchip.utils_mh3.utils.persistence.CustomModuleData
+data:
+  attachments: {}
+  elementPosition:
+    attributes:
+      id: __ROOTVIEW
+    children:
+    - children:
+      - attributes:
+          id: sercom5
+          x: '426'
+          y: '192'
+        type: ElementPosition
+      type: ElementPositions
+    type: ComponentGraph
+  symbols:
+    I2CM_BAUD:
+      attributes:
+        id: I2CM_BAUD
+      children:
+      - children:
+        - attributes:
+            id: sercom5
+            value: '232'
+          type: Dynamic
+        type: Values
+      type: Hex
+    SPI_BAUD_REG_VALUE:
+      attributes:
+        id: SPI_BAUD_REG_VALUE
+      children:
+      - children:
+        - attributes:
+            id: sercom5
+            value: '23'
+          type: Dynamic
+        type: Values
+      type: Integer
+    USART_BAUD_VALUE:
+      attributes:
+        id: USART_BAUD_VALUE
+      children:
+      - children:
+        - attributes:
+            id: sercom5
+            value: '26'
+          type: Dynamic
+        type: Values
+      type: Integer
+    USART_LIN_MASTER_SUPPORTED:
+      attributes:
+        id: USART_LIN_MASTER_SUPPORTED
+      children:
+      - children:
+        - attributes:
+            id: sercom5
+            value: 'false'
+          type: Dynamic
+        type: Values
+      type: Boolean
+    USART_RXPO:
+      attributes:
+        id: USART_RXPO
+      children:
+      - children:
+        - attributes:
+            value: '2'
+          type: User
+        type: Values
+      type: KeyValueSet
+    USART_SAMPLE_COUNT:
+      attributes:
+        id: USART_SAMPLE_COUNT
+      children:
+      - children:
+        - attributes:
+            id: sercom5
+            value: '16'
+          type: Dynamic
+        type: Values
+      type: Integer
+    USART_SAMPLE_RATE:
+      attributes:
+        id: USART_SAMPLE_RATE
+      children:
+      - children:
+        - attributes:
+            id: sercom5
+            value: '1'
+          type: Dynamic
+        type: Values
+      type: Integer
+    USART_USE_FRACTIONAL_BAUD:
+      attributes:
+        id: USART_USE_FRACTIONAL_BAUD
+      children:
+      - children:
+        - attributes:
+            id: sercom5
+            value: 'false'
+          type: Dynamic
+        - attributes:
+            value: 'true'
+          type: User
+        type: Values
+      type: Boolean
+    USART_RX_ENABLE:
+      attributes:
+        id: USART_RX_ENABLE
+      children:
+      - children:
+        - attributes:
+            value: 'false'
+          type: User
+        type: Values
+      type: Boolean
+    SERCOM_USART_BAUD_NAME:
+      attributes:
+        id: SERCOM_USART_BAUD_NAME
+      children:
+      - children:
+        - attributes:
+            id: sercom5
+            value: USART_INT_BAUD_BAUD
+          type: Dynamic
+        type: Values
+      type: String
+  userData: {}

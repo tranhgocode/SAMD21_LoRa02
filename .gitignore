@@ -1,0 +1,30 @@
+# MPLAB X build outputs
+**/build/
+**/debug/
+**/dist/
+**/.generated_files/
+
+# MPLAB X user-specific settings
+**/nbproject/private/
+**/nbproject/Makefile-*.mk
+**/nbproject/Package-*.bash
+
+# Compiled firmware and intermediate files
+*.o
+*.d
+*.a
+*.elf
+*.hex
+*.bin
+*.map
+
+# Editor and operating-system files
+.vscode/
+.idea/
+*.user
+*.log
+*.tmp
+*.swp
+*~
+.DS_Store
+Thumbs.db

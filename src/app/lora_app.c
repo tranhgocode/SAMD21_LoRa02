@@ -95,12 +95,12 @@ bool LORA_APP_Initialize(void)
 
     if (!loraReady)
     {
-        LORA_APP_Print("ERROR: SX1278 not found (check 3.3 V, GND, SPI and NSS).\r\n");
+        LORA_APP_Print("ERROR: SX1278 not found \r\n");
         return false;
     }
 
 #if (LORA_APP_ROLE == LORA_APP_ROLE_TRANSMITTER)
-    LORA_APP_Print("Role: TRANSMITTER - sending one packet every 2 seconds.\r\n");
+    LORA_APP_Print("Role: TRANSMITTER - sending one packet every 2 seconds\r\n");
 #else
     LORA_APP_Print("Role: RECEIVER - waiting for packets.\r\n");
 #endif

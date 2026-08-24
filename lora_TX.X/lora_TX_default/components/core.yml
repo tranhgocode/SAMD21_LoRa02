@@ -445,7 +445,7 @@ data:
       - children:
         - attributes:
             id: core
-            value: '0x40400'
+            value: '0x40401'
           type: Dynamic
         type: Values
       type: String
@@ -1068,6 +1068,140 @@ data:
       - children:
         - attributes:
             value: High
+          type: User
+        type: Values
+      type: String
+    PIN_1_MODE:
+      attributes:
+        id: PIN_1_MODE
+      children:
+      - children:
+        - attributes:
+            value: ''
+          type: User
+        type: Values
+      type: String
+    PIN_1_FUNCTION_TYPE:
+      attributes:
+        id: PIN_1_FUNCTION_TYPE
+      children:
+      - children:
+        - attributes:
+            value: GPIO
+          type: User
+        type: Values
+      type: String
+    PORT_GROUP_0_PINCFG0:
+      attributes:
+        id: PORT_GROUP_0_PINCFG0
+      children:
+      - children:
+        - attributes:
+            id: core
+            value: '0x6'
+          type: Dynamic
+        type: Values
+      type: String
+    PORT_GROUP_0_PIN_0_USED:
+      attributes:
+        id: PORT_GROUP_0_PIN_0_USED
+      children:
+      - children:
+        - attributes:
+            id: core
+            value: 'true'
+          type: Dynamic
+        type: Values
+      type: Boolean
+    PIN_1_INEN:
+      attributes:
+        id: PIN_1_INEN
+      children:
+      - children:
+        - attributes:
+            value: 'True'
+          type: User
+        type: Values
+      type: String
+    PIN_1_DIR:
+      attributes:
+        id: PIN_1_DIR
+      children:
+      - children:
+        - attributes:
+            value: Out
+          type: User
+        type: Values
+      type: String
+    PORT_GROUP_0_PMUX0:
+      attributes:
+        id: PORT_GROUP_0_PMUX0
+      children:
+      - children:
+        - attributes:
+            id: core
+            value: '0x0'
+          type: Dynamic
+        type: Values
+      type: String
+    PORT_GROUP_0_PAD_0:
+      attributes:
+        id: PORT_GROUP_0_PAD_0
+      children:
+      - children:
+        - attributes:
+            id: core
+            value: PA00
+          type: Dynamic
+        type: Values
+      type: String
+    PIN_1_PERIPHERAL_FUNCTION:
+      attributes:
+        id: PIN_1_PERIPHERAL_FUNCTION
+      children:
+      - children:
+        - attributes:
+            value: GPIO
+          type: User
+        type: Values
+      type: String
+    PIN_1_FUNCTION_NAME:
+      attributes:
+        id: PIN_1_FUNCTION_NAME
+      children:
+      - children:
+        - attributes:
+            value: DHT11_DATA
+          type: User
+        type: Values
+      type: String
+    PIN_1_PULLEN:
+      attributes:
+        id: PIN_1_PULLEN
+      children:
+      - children:
+        - attributes:
+            value: 'True'
+          type: User
+        type: Values
+      type: String
+    PIN_1_DRVSTR:
+      attributes:
+        id: PIN_1_DRVSTR
+      children:
+      - children:
+        - attributes:
+            value: '0'
+          type: User
+        type: Values
+      type: KeyValueSet
+    PIN_1_LAT:
+      attributes:
+        id: PIN_1_LAT
+      children:
+      - children:
+        - attributes:
+            value: ''
           type: User
         type: Values
       type: String

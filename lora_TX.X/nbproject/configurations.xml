@@ -218,12 +218,16 @@
           <itemPath>../src/drivers/sx1278/SX1278_hw.c</itemPath>
         </logicalFolder>
       </logicalFolder>
+      <logicalFolder name="mylib" displayName="mylib" projectFiles="true">
+        <itemPath>../src/mylib/DHT11.c</itemPath>
+      </logicalFolder>
       <itemPath>../src/main.c</itemPath>
     </logicalFolder>
   </logicalFolder>
   <sourceRootList>
     <Elem>../src/drivers</Elem>
     <Elem>../src/app</Elem>
+    <Elem>../src/mylib</Elem>
   </sourceRootList>
   <projectmakefile>Makefile</projectmakefile>
   <confs>

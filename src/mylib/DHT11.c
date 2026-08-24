@@ -33,7 +33,55 @@ static bool     DHT11_ReadBit(DHT11_HandleTypeDef *handle, uint8_t *bit);
 static bool     DHT11_ReadAllBits(DHT11_HandleTypeDef *handle, uint8_t *raw_data);
 static bool     DHT11_VerifyChecksum(const uint8_t *raw_data);
 static void     DHT11_ParseData(DHT11_HandleTypeDef *handle, const uint8_t *raw_data);
+static void     DHT11_DelayUs(uint32_t usec);
+static void     DHT11_DelayMs(uint32_t msec);
 /*PRIVATE FUNCTION END*/
+
+static void DHT11_DelayUs(uint32_t usec)
+{
+    if (usec == 0U)
+    {
+        return;
+    }
+
+    SysTick->LOAD = (CPU_CLOCK_FREQUENCY / 1000000U) - 1U;
+    SysTick->VAL = 0U;
+    SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_ENABLE_Msk;
+
+    while (usec > 0U)
+    {
+        while ((SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) == 0U)
+        {
+            /* Wait for one microsecond. */
+        }
+        usec--;
+    }
+
+    SysTick->CTRL = 0U;
+}
+
+static void DHT11_DelayMs(uint32_t msec)
+{
+    if (msec == 0U)
+    {
+        return;
+    }
+
+    SysTick->LOAD = (CPU_CLOCK_FREQUENCY / 1000U) - 1U;
+    SysTick->VAL = 0U;
+    SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_ENABLE_Msk;
+
+    while (msec > 0U)
+    {
+        while ((SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) == 0U)
+        {
+            /* Wait for one millisecond. */
+        }
+        msec--;
+    }
+
+    SysTick->CTRL = 0U;
+}
 
 
 /**
@@ -47,11 +95,11 @@ static void     DHT11_ParseData(DHT11_HandleTypeDef *handle, const uint8_t *raw_
 static void DHT11_SendStartSignal(DHT11_HandleTypeDef *handle)
 {
     DHT11_PIN_SET_OUTPUT_LOW(handle->pin);          /* Step 1: Pull DATA LOW to signal start            */
-    delay_ms(DHT11_START_LOW_US / 1000U);           /* Hold LOW for 18 ms using delay_ms() in my_delay.h */
+    DHT11_DelayMs(DHT11_START_LOW_US / 1000U);      /* Hold DATA LOW for at least 18 ms */
 
     PORT_PinSet(handle->pin);                       /* Set latch HIGH to enable pull-up when switching to INPUT */
     DHT11_PIN_SET_INPUT(handle->pin);               /* Step 2: Release bus so DHT11 can pull DATA LOW           */
-    delay_us(DHT11_START_HIGH_US);                  /* Wait 30 us for DHT11 to prepare its response             */
+    DHT11_DelayUs(DHT11_START_HIGH_US);             /* Wait 30 us for DHT11 to prepare its response             */
 }
 
 
@@ -73,7 +121,7 @@ static bool DHT11_WaitResponse(DHT11_HandleTypeDef *handle)
     timeout_cnt = 0;
     while (DHT11_PIN_READ(handle->pin) == 1)        /* Wait for DATA to change from HIGH to LOW */
     {
-        delay_us(1);                                /* Wait in 1 us steps */
+        DHT11_DelayUs(1U);                          /* Wait in 1 us steps */
         timeout_cnt++;
         if (timeout_cnt >= DHT11_RESPONSE_WAIT_US)  /* More than 100 us without LOW means error */
         {
@@ -85,7 +133,7 @@ static bool DHT11_WaitResponse(DHT11_HandleTypeDef *handle)
     timeout_cnt = 0;
     while (DHT11_PIN_READ(handle->pin) == 0)        /* Wait for DATA to change from LOW to HIGH */
     {
-        delay_us(1);
+        DHT11_DelayUs(1U);
         timeout_cnt++;
         if (timeout_cnt >= handle->timeout_us)      /* Timeout means error */
         {
@@ -97,7 +145,7 @@ static bool DHT11_WaitResponse(DHT11_HandleTypeDef *handle)
     timeout_cnt = 0;
     while (DHT11_PIN_READ(handle->pin) == 1)        /* Wait for the 80 us HIGH response to finish    */
     {
-        delay_us(1);
+        DHT11_DelayUs(1U);
         timeout_cnt++;
         if (timeout_cnt >= handle->timeout_us)
         {
@@ -128,7 +176,7 @@ static bool DHT11_ReadBit(DHT11_HandleTypeDef *handle, uint8_t *bit)
     timeout_cnt = 0;
     while (DHT11_PIN_READ(handle->pin) == 0)        /* Wait for DATA to change from LOW to HIGH */
     {
-        delay_us(1);
+        DHT11_DelayUs(1U);
         timeout_cnt++;
         if (timeout_cnt >= handle->timeout_us)      /* Timeout means transmission error */
         {
@@ -140,14 +188,14 @@ static bool DHT11_ReadBit(DHT11_HandleTypeDef *handle, uint8_t *bit)
      * 2. After the rising edge, wait past the bit '0' window (~26-28 us),
      *    then read DATA. If DATA is still HIGH, it is bit '1'; if LOW, it is bit '0'.
      */
-    delay_us(DHT11_BIT_THRESHOLD_US);
+    DHT11_DelayUs(DHT11_BIT_THRESHOLD_US);
     *bit = (DHT11_PIN_READ(handle->pin) == 1U) ? 1U : 0U;
 
     /* 3. Wait for the HIGH pulse to end before reading the next bit */
     timeout_cnt = 0;
     while (DHT11_PIN_READ(handle->pin) == 1)        /* Count HIGH time until DATA returns LOW */
     {
-        delay_us(1);
+        DHT11_DelayUs(1U);
         timeout_cnt++;
         if (timeout_cnt >= handle->timeout_us)      /* Timeout means error */
         {

@@ -10,6 +10,9 @@
 
 #include "definitions.h"
 #include "drivers/sx1278/SX1278.h"
+#if (LORA_APP_ROLE == LORA_APP_ROLE_TRANSMITTER)
+#include "mylib/DHT11.h"
+#endif
 
 #define LORA_APP_FREQUENCY_HZ       433000000ULL
 #define LORA_APP_PACKET_LENGTH      64U
@@ -30,7 +33,10 @@ static SX1278_t loraModule =
 };
 static bool loraReady;
 static bool receiverStarted;
-static uint32_t packetCounter;
+#if (LORA_APP_ROLE == LORA_APP_ROLE_TRANSMITTER)
+static DHT11_HandleTypeDef dht11;
+static bool dht11Ready;
+#endif
 
 static void LORA_APP_Print(const char *text)
 {
@@ -53,6 +59,7 @@ static void LORA_APP_Print(const char *text)
     }
 }
 
+#if (LORA_APP_ROLE == LORA_APP_ROLE_TRANSMITTER)
 static char *LORA_APP_AppendUnsigned(char *destination, uint32_t value)
 {
     char reversed[10];
@@ -74,12 +81,21 @@ static char *LORA_APP_AppendUnsigned(char *destination, uint32_t value)
 
     return destination;
 }
+#endif
 
 bool LORA_APP_Initialize(void)
 {
     uint8_t version;
 
-    LORA_APP_Print("\r\nLoRa-02 test: 433 MHz, SF7, BW125, CR4/5, CRC on\r\n");
+    LORA_APP_Print("\r\nLoRa-02 config: 433 MHz, SF7, BW125, CR4/5, CRC on\r\n");
+
+#if (LORA_APP_ROLE == LORA_APP_ROLE_TRANSMITTER)
+    dht11Ready = DHT11_Init(&dht11, DHT11_DATA_PIN, DHT11_DEFAULT_TIMEOUT);
+    if (!dht11Ready)
+    {
+        LORA_APP_Print("ERROR: DHT11 initialization failed\r\n");
+    }
+#endif
 
     SX1278_init(&loraModule,
                 LORA_APP_FREQUENCY_HZ,
@@ -100,7 +116,7 @@ bool LORA_APP_Initialize(void)
     }
 
 #if (LORA_APP_ROLE == LORA_APP_ROLE_TRANSMITTER)
-    LORA_APP_Print("Role: TRANSMITTER - sending one packet every 2 seconds\r\n");
+    LORA_APP_Print("Role: TRANSMITTER - sending DHT11 temperature every 2 seconds\r\n");
 #else
     LORA_APP_Print("Role: RECEIVER - waiting for packets.\r\n");
 #endif
@@ -120,11 +136,30 @@ void LORA_APP_Tasks(void)
     {
         uint8_t message[32];
         char *end = (char *)message;
+        float temperature;
+        uint32_t temperatureTenths;
         uint8_t length;
 
-        memcpy(end, "Hello LoRa #", 12U);
-        end += 12;
-        end = LORA_APP_AppendUnsigned(end, packetCounter);
+        if ((!dht11Ready) ||
+            (!DHT11_Read(&dht11)) ||
+            (!DHT11_GetTemperature(&dht11, &temperature)))
+        {
+            LORA_APP_Print("DHT11 READ ERROR\r\n");
+            SX1278_hw_DelayMs(LORA_APP_TX_PERIOD_MS);
+            return;
+        }
+
+        /* DHT11 has 0.1 degree resolution; format it without float printf. */
+        temperatureTenths = (uint32_t)((temperature * 10.0f) + 0.5f);
+        memcpy(end, "Temperature: ", 13U);
+        end += 13;
+        end = LORA_APP_AppendUnsigned(end, temperatureTenths / 10U);
+        *end = '.';
+        end++;
+        *end = (char)('0' + (temperatureTenths % 10U));
+        end++;
+        memcpy(end, " C", 2U);
+        end += 2;
         length = (uint8_t)(end - (char *)message);
 
         if (SX1278_transmit(&loraModule,
@@ -136,7 +171,6 @@ void LORA_APP_Tasks(void)
             *end = '\0';
             LORA_APP_Print((char *)message);
             LORA_APP_Print("\r\n");
-            packetCounter++;
         }
         else
         {

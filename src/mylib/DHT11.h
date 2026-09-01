@@ -36,10 +36,13 @@ typedef enum {
  * @brief Structure storing data read from the DHT11.
  */
 typedef struct {
+    uint8_t humidity_int;       /**< Integer part of relative humidity */
+    uint8_t humidity_dec;       /**< Decimal part of relative humidity */
     uint8_t temperature_int;    /**< Integer part of temperature  */
     uint8_t temperature_dec;    /**< Decimal part of temperature  */
     uint8_t checksum;           /**< Checksum from DHT11          */
 
+    float   humidity;           /**< Relative humidity, in percent */
     float   temperature;        /**< Temperature, in degrees C    */
 
     bool    is_valid;           /**< true if checksum is valid    */
@@ -64,7 +67,7 @@ typedef struct {
 bool DHT11_Init(DHT11_HandleTypeDef *handle, PORT_PIN pin, uint32_t timeout_us);
 
 /**
- * @brief Read temperature from the DHT11.
+ * @brief Read temperature and humidity from the DHT11.
  * @return true if the read succeeds and checksum is valid, false on NULL/timeout/no response/checksum error.
  * @note Call this function at least DHT11_MIN_INTERVAL_MS apart.
  *       The library returns true/false and no longer returns detailed error codes.
@@ -76,6 +79,12 @@ bool DHT11_Read(DHT11_HandleTypeDef *handle);
  * @return true if the value is available, false if pointer is NULL or data is not valid yet.
  */
 bool DHT11_GetTemperature(const DHT11_HandleTypeDef *handle, float *temperature);
+
+/**
+ * @brief Get relative humidity from the most recent valid read.
+ * @return true if the value is available, false if pointer is NULL or data is not valid yet.
+ */
+bool DHT11_GetHumidity(const DHT11_HandleTypeDef *handle, float *humidity);
 
 /**
  * @brief Reset data in the handle while keeping pin and timeout unchanged.

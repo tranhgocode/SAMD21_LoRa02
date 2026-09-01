@@ -276,6 +276,10 @@ static bool DHT11_VerifyChecksum(const uint8_t *raw_data)
  */
 static void DHT11_ParseData(DHT11_HandleTypeDef *handle, const uint8_t *raw_data)
 {
+    /* Store humidity bytes into the data structure */
+    handle->data.humidity_int    = raw_data[0];     /* Byte 0: Integer part of humidity        */
+    handle->data.humidity_dec    = raw_data[1];     /* Byte 1: Decimal part of humidity        */
+
     /* Store temperature bytes into the data structure */
     handle->data.temperature_int = raw_data[2];     /* Byte 2: Integer part of temperature     */
     handle->data.temperature_dec = raw_data[3];     /* Byte 3: Decimal part of temperature     */
@@ -286,12 +290,14 @@ static void DHT11_ParseData(DHT11_HandleTypeDef *handle, const uint8_t *raw_data
 
     if (handle->data.is_valid)
     {
-        /* Calculate float value: integer part + decimal part / 10 */
+        /* Calculate values: integer part + decimal part / 10 */
+        handle->data.humidity = (float)raw_data[0] + ((float)raw_data[1] / 10.0f); /* %RH */
         handle->data.temperature = (float)raw_data[2] + ((float)raw_data[3] / 10.0f); /* deg C */
     }
     else
     {
         /* Invalid checksum: keep float values at 0.0f to avoid stale data use */
+        handle->data.humidity    = 0.0f;
         handle->data.temperature = 0.0f;
     }
 }
@@ -310,9 +316,12 @@ bool DHT11_Init(DHT11_HandleTypeDef *handle, PORT_PIN pin, uint32_t timeout_us)
     handle->timeout_us           = (timeout_us > 0U) ? timeout_us : DHT11_DEFAULT_TIMEOUT; /* Use default value if timeout = 0 */
 
     /* Clear the data structure */
+    handle->data.humidity_int    = 0U;
+    handle->data.humidity_dec    = 0U;
     handle->data.temperature_int = 0U;
     handle->data.temperature_dec = 0U;
     handle->data.checksum        = 0U;
+    handle->data.humidity        = 0.0f;
     handle->data.temperature     = 0.0f;
     handle->data.is_valid        = false;
 
@@ -392,6 +401,25 @@ bool DHT11_GetTemperature(const DHT11_HandleTypeDef *handle, float *temperature)
 }
 
 /**
+ * @brief   Get relative humidity value from handle.
+ */
+bool DHT11_GetHumidity(const DHT11_HandleTypeDef *handle, float *humidity)
+{
+    if ((handle == NULL) || (humidity == NULL))
+    {
+        return false;
+    }
+
+    if (!handle->data.is_valid)
+    {
+        return false;
+    }
+
+    *humidity = handle->data.humidity;
+    return true;
+}
+
+/**
  * @brief   Reset handle state.
  */
 bool DHT11_Reset(DHT11_HandleTypeDef *handle)
@@ -402,9 +430,12 @@ bool DHT11_Reset(DHT11_HandleTypeDef *handle)
     }
 
     /* Clear only data, keeping pin and timeout unchanged */
+    handle->data.humidity_int    = 0U;
+    handle->data.humidity_dec    = 0U;
     handle->data.temperature_int = 0U;
     handle->data.temperature_dec = 0U;
     handle->data.checksum        = 0U;
+    handle->data.humidity        = 0.0f;
     handle->data.temperature     = 0.0f;
     handle->data.is_valid        = false;
 

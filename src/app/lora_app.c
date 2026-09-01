@@ -81,19 +81,33 @@ static char *LORA_APP_AppendUnsigned(char *destination, uint32_t value)
 
     return destination;
 }
+
+static char *LORA_APP_AppendTenths(char *destination, float value)
+{
+    /* Format one decimal place without linking the floating-point printf code. */
+    uint32_t valueTenths = (uint32_t)((value * 10.0f) + 0.5f);
+
+    destination = LORA_APP_AppendUnsigned(destination, valueTenths / 10U);
+    *destination = '.';
+    destination++;
+    *destination = (char)('0' + (valueTenths % 10U));
+    destination++;
+
+    return destination;
+}
 #endif
 
 bool LORA_APP_Initialize(void)
 {
     uint8_t version;
 
-    LORA_APP_Print("\r\nLoRa-02 config: 433 MHz, SF7, BW125, CR4/5, CRC on\r\n");
+    LORA_APP_Print("\r\nstatus: LoRa-02 configuration: 433 MHz, SF7, BW125, CR4/5, CRC enabled\r\n");
 
 #if (LORA_APP_ROLE == LORA_APP_ROLE_TRANSMITTER)
     dht11Ready = DHT11_Init(&dht11, DHT11_DATA_PIN, DHT11_DEFAULT_TIMEOUT);
     if (!dht11Ready)
     {
-        LORA_APP_Print("ERROR: DHT11 initialization failed\r\n");
+        LORA_APP_Print("error: DHT11 initialization failed\r\n");
     }
 #endif
 
@@ -111,14 +125,14 @@ bool LORA_APP_Initialize(void)
 
     if (!loraReady)
     {
-        LORA_APP_Print("ERROR: SX1278 not found \r\n");
+        LORA_APP_Print("error: SX1278 was not detected; check power and SPI wiring\r\n");
         return false;
     }
 
 #if (LORA_APP_ROLE == LORA_APP_ROLE_TRANSMITTER)
-    LORA_APP_Print("Role: TRANSMITTER - sending DHT11 temperature every 2 seconds\r\n");
+    LORA_APP_Print("status: transmitter ready; sending DHT11 data every 2 seconds\r\n");
 #else
-    LORA_APP_Print("Role: RECEIVER - waiting for packets.\r\n");
+    LORA_APP_Print("status: receiver ready; waiting for LoRa packets\r\n");
 #endif
 
     return true;
@@ -137,29 +151,28 @@ void LORA_APP_Tasks(void)
         uint8_t message[32];
         char *end = (char *)message;
         float temperature;
-        uint32_t temperatureTenths;
+        float humidity;
         uint8_t length;
 
         if ((!dht11Ready) ||
             (!DHT11_Read(&dht11)) ||
-            (!DHT11_GetTemperature(&dht11, &temperature)))
+            (!DHT11_GetTemperature(&dht11, &temperature)) ||
+            (!DHT11_GetHumidity(&dht11, &humidity)))
         {
-            LORA_APP_Print("DHT11 READ ERROR\r\n");
+            LORA_APP_Print("error: failed to read valid DHT11 data\r\n");
             SX1278_hw_DelayMs(LORA_APP_TX_PERIOD_MS);
             return;
         }
 
-        /* DHT11 has 0.1 degree resolution; format it without float printf. */
-        temperatureTenths = (uint32_t)((temperature * 10.0f) + 0.5f);
-        memcpy(end, "Temperature: ", 13U);
-        end += 13;
-        end = LORA_APP_AppendUnsigned(end, temperatureTenths / 10U);
-        *end = '.';
-        end++;
-        *end = (char)('0' + (temperatureTenths % 10U));
-        end++;
-        memcpy(end, " C", 2U);
+        /* Keep the radio payload compact and independent of the UART log text. */
+        memcpy(end, "T=", 2U);
         end += 2;
+        end = LORA_APP_AppendTenths(end, temperature);
+        memcpy(end, "C H=", 4U);
+        end += 4;
+        end = LORA_APP_AppendTenths(end, humidity);
+        *end = '%';
+        end++;
         length = (uint8_t)(end - (char *)message);
 
         if (SX1278_transmit(&loraModule,
@@ -167,14 +180,14 @@ void LORA_APP_Tasks(void)
                            length,
                            LORA_APP_RADIO_TIMEOUT_MS) != 0)
         {
-            LORA_APP_Print("TX OK: ");
             *end = '\0';
+            LORA_APP_Print("status: sent: ");
             LORA_APP_Print((char *)message);
             LORA_APP_Print("\r\n");
         }
         else
         {
-            LORA_APP_Print("TX TIMEOUT\r\n");
+            LORA_APP_Print("error: LoRa transmission timed out\r\n");
         }
 
         SX1278_hw_DelayMs(LORA_APP_TX_PERIOD_MS);
@@ -187,7 +200,7 @@ void LORA_APP_Tasks(void)
                                           LORA_APP_RADIO_TIMEOUT_MS) != 0);
         if (!receiverStarted)
         {
-            LORA_APP_Print("RX START TIMEOUT - retrying\r\n");
+            LORA_APP_Print("error: receiver start timed out; retrying\r\n");
         }
     }
     else
@@ -200,7 +213,7 @@ void LORA_APP_Tasks(void)
             uint8_t message[SX1278_MAX_PACKET];
 
             (void)SX1278_read(&loraModule, message, bytesReceived);
-            LORA_APP_Print("RX OK: ");
+            LORA_APP_Print("status: received: ");
             LORA_APP_Print((char *)message);
             LORA_APP_Print("\r\n");
 

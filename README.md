@@ -1,102 +1,127 @@
-# LoRa-02 (SX1278) với SAM D21 Curiosity Nano
+# LoRa-02 (SX1278) with SAM D21
 
-Project thử nghiệm truyền và nhận LoRa ở tần số **433 MHz** bằng module
-Ai-Thinker LoRa-02 (SX1278) và vi điều khiển ATSAMD21G17D.
+This project demonstrates a 433 MHz LoRa link using an Ai-Thinker LoRa-02
+(SX1278) module and an ATSAMD21G17D microcontroller. The transmitter reads
+temperature and relative humidity from a DHT11 sensor, sends the values every
+two seconds, and reports its state through the debug UART. The same application
+can also be built as a LoRa receiver.
 
-## GPIO mapping
+## Hardware
 
-| Tín hiệu LoRa-02 | GPIO SAM D21 | Chức năng | Hướng nhìn từ SAM D21 | Trạng thái ban đầu |
-|---|---:|---|---|---|
-| `MOSI` | `PA16` | `SERCOM1_PAD0` | Output | SPI data từ MCU đến LoRa-02 |
-| `SCK` | `PA17` | `SERCOM1_PAD1` | Output | SPI clock |
-| `MISO` | `PA19` | `SERCOM1_PAD3` | Input | SPI data từ LoRa-02 về MCU |
-| `NSS` / `CS` | `PA18` | GPIO output | Output | High, không chọn module |
-| `RESET` | `PA10` | GPIO output | Output | High, reset tích cực mức thấp |
-| `DIO0` | `PA11` | GPIO input | Input | Báo `TxDone` hoặc `RxDone` |
-| `VCC` | `3.3V` | Nguồn | — | Chỉ sử dụng 3.3 V |
-| `GND` | `GND` | Mass | — | Nối chung GND với board |
+- SAM D21 Curiosity Nano board with an ATSAMD21G17D
+- Ai-Thinker LoRa-02 (SX1278) 433 MHz module
+- 433 MHz antenna
+- DHT11 temperature and humidity sensor for transmitter mode
+- Stable 3.3 V supply
 
-Các chân `DIO1` đến `DIO5` của LoRa-02 không được sử dụng trong bài test này.
+## LoRa-02 pin connections
 
-### Sơ đồ nối nhanh
+The arrows show the signal direction relative to the SAM D21.
 
-```text
-SAM D21 Curiosity Nano                  LoRa-02 / SX1278
+| SAM D21 pin | LoRa-02 pin | Purpose                         |
+| ----------- | ----------- | ------------------------------- |
+| `3.3V`      | `VCC`       | 3.3 V power supply              |
+| `GND`       | `GND`       | Common ground                   |
+| `PA16`      | `MOSI`      | SPI data from the MCU           |
+| `PA17`      | `SCK`       | SPI clock                       |
+| `PA19`      | `MISO`      | SPI data from the LoRa-02       |
+| `PA18`      | `NSS / CS`  | Active-low SPI chip select      |
+| `PA10`      | `RESET`     | Active-low hardware reset       |
+| `PA11`      | `DIO0`      | `TxDone` or `RxDone` indication |
 
-3.3V  --------------------------------> VCC
-GND   --------------------------------> GND
-PA16  --------------------------------> MOSI
-PA17  --------------------------------> SCK
-PA19  <-------------------------------- MISO
-PA18  --------------------------------> NSS / CS
-PA10  --------------------------------> RESET
-PA11  <-------------------------------- DIO0
-```
+The LoRa-02 `DIO1` through `DIO5` pins are not used by this application
 
-## Cấu hình giao tiếp
+## DHT11 connection
 
-- SPI: `SERCOM1`, master, Mode 0, MSB first, 1 MHz.
-- UART debug: `SERCOM5`, 115200 baud.
-- UART TX: `PA22`.
-- UART RX: `PB22`.
-- LoRa: 433 MHz, SF7, bandwidth 125 kHz, coding rate 4/5, CRC bật.
-- Công suất phát: 17 dBm.
+The DHT11 data line is configured on `PA00`. Power the sensor from 3.3 V and
+connect its ground to the board ground. Add a pull-up resistor on the data line
+if the DHT11 module does not already include one.
 
-## Chọn chế độ TX hoặc RX
+| SAM D21 pin | DHT11 pin | Purpose                 |
+| ----------- | --------- | ----------------------- |
+| `3.3V`      | `VCC`     | Sensor power            |
+| `GND`       | `GND`     | Common ground           |
+| `PA00`      | `DATA`    | Single-wire sensor data |
 
-Chọn vai trò trong `src/app/lora_app.h`:
+## Interface configuration
 
-```c
-#define LORA_APP_ROLE_RECEIVER     0U
-#define LORA_APP_ROLE_TRANSMITTER  1U
-```
+- LoRa carrier frequency: 433 MHz
+- Spreading factor: SF7
+- Signal bandwidth: 125 kHz
+- Coding rate: 4/5
+- Payload CRC: enabled
+- Transmit power setting: 17 dBm
+- SPI: `SERCOM1`, master mode, Mode 0, MSB first, 1 MHz
+- Debug UART: `SERCOM5`, 115200 baud, 8-N-1 (transmit only)
+- UART TX: `PA22`
+- `PB22` is assigned to the SERCOM5 RX function in the pin configuration, but
+  this application does not enable or use UART reception
 
-Bộ phát:
+## Selecting transmitter or receiver mode
+
+Set `LORA_APP_ROLE` in `src/app/lora_app.h` before building the firmware.
+
+For the transmitter:
 
 ```c
 #define LORA_APP_ROLE LORA_APP_ROLE_TRANSMITTER
 ```
 
-Bộ nhận:
+For the receiver:
 
 ```c
 #define LORA_APP_ROLE LORA_APP_ROLE_RECEIVER
 ```
 
-Cần hai board và hai module LoRa-02 để kiểm tra đường truyền: một board nạp
-firmware TX, board còn lại nạp firmware RX. Hai phía phải dùng cùng cấu hình
-tần số, spreading factor, bandwidth, coding rate, CRC và sync word.
+A complete link test requires two boards and two LoRa-02 modules. Flash one
+board as the transmitter and the other as the receiver. Both radios must use
+the same frequency, spreading factor, bandwidth, coding rate, CRC setting, and
+sync word.
 
-## Kết quả UART dự kiến
+## Building and running
 
-Bên phát:
+1. Open `lora_TX.X` in MPLAB X IDE.
+2. Select the installed XC32 compiler and build the `default` configuration.
+3. Connect the hardware according to the tables above.
+4. Attach a 433 MHz antenna before enabling the transmitter.
+5. Program the board and open the debug UART at 115200 baud, 8 data bits, no
+   parity, and 1 stop bit.
+
+## UART log format
+
+Every complete UART log line begins with a lowercase category prefix:
+
+- `status: ` reports normal operation.
+- `error: ` reports an initialization, sensor, timeout, or communication error.
+
+Example transmitter output:
 
 ```text
-LoRa-02 test: 433 MHz, SF7, BW125, CR4/5, CRC on
-Role: TRANSMITTER - sending one packet every 2 seconds.
-TX OK: Hello LoRa #0
+status: LoRa-02 configuration: 433 MHz, SF7, BW125, CR4/5, CRC enabled
+status: transmitter ready; sending DHT11 data every 2 seconds
+status: sent: T=25.0C H=60.0%
 ```
 
-Bên nhận:
+Example receiver output:
 
 ```text
-LoRa-02 test: 433 MHz, SF7, BW125, CR4/5, CRC on
-Role: RECEIVER - waiting for packets.
-RX OK: Hello LoRa #0
+status: LoRa-02 configuration: 433 MHz, SF7, BW125, CR4/5, CRC enabled
+status: receiver ready; waiting for LoRa packets
+status: received: T=25.0C H=60.0%
 ```
 
-Nếu SPI không giao tiếp được với SX1278, UART sẽ hiển thị:
+If the radio cannot be detected, the UART reports:
 
 ```text
-ERROR: SX1278 not found (check 3.3 V, GND, SPI and NSS).
+error: SX1278 was not detected; check power and SPI wiring
 ```
 
-## Lưu ý phần cứng
+## Hardware notes
 
-- Không cấp 5 V vào LoRa-02 hoặc các chân GPIO của SAM D21.
-- Gắn antenna 433 MHz trước khi bật chế độ phát.
-- Dùng dây SPI ngắn và nối GND chắc chắn.
-- Nguồn 3.3 V phải đáp ứng được dòng phát của module; đặt tụ decoupling gần
-  chân nguồn LoRa-02 nếu nguồn bị sụt áp hoặc module hoạt động không ổn định.
-- `NSS`, `RESET` và `DIO0` phải đúng với mapping trên. Nếu thay đổi trong MPLAB
-  Code Configurator, cần generate lại cấu hình và cập nhật lớp `SX1278_hw`.
+- Never apply 5 V to the LoRa-02 or to a SAM D21 GPIO pin.
+- Attach a 433 MHz antenna before transmitting.
+- Keep SPI wires short and use a reliable common-ground connection.
+- Ensure that the 3.3 V supply can provide the radio's peak transmit current.
+  Place a decoupling capacitor close to the LoRa-02 if the supply is unstable.
+- If the pin mapping is changed in MPLAB Code Configurator, regenerate the
+  Harmony configuration and update the SX1278 hardware abstraction layer.

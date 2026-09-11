@@ -21,6 +21,7 @@
 # Editor and operating-system files
 .vscode/
 .idea/
+.agent/
 *.user
 *.log
 *.tmp

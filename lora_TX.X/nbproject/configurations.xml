@@ -219,7 +219,9 @@
         </logicalFolder>
       </logicalFolder>
       <logicalFolder name="mylib" displayName="mylib" projectFiles="true">
-        <itemPath>../src/mylib/DHT11.c</itemPath>
+        <logicalFolder name="sensors" displayName="sensors" projectFiles="true">
+          <itemPath>../src/mylib/sensors/DHT11.c</itemPath>
+        </logicalFolder>
       </logicalFolder>
       <itemPath>../src/main.c</itemPath>
     </logicalFolder>

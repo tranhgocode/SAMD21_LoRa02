@@ -15,10 +15,10 @@ extern "C" {
 #endif
 
 /**
- * Calculate CRC-16/CCITT-FALSE for a byte buffer.
+ * Calculate CRC-16/CCITT-FALSE for a byte buffer
  *
  * A NULL data pointer is valid only when length is zero. In that case the
- * result is the algorithm's initial value, 0xFFFF.
+ * result is the algorithm's initial value, 0xFFFF
  */
 bool CRC16_CalculateCcittFalse(const uint8_t *data,
                                size_t length,

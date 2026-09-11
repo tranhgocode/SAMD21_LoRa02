@@ -11,7 +11,7 @@
 #include "definitions.h"
 #include "drivers/sx1278/SX1278.h"
 #if (LORA_APP_ROLE == LORA_APP_ROLE_TRANSMITTER)
-#include "../mylib/sensors/DHT11.h"
+#include "../drivers/sensors/DHT11.h"
 #endif
 
 #define LORA_APP_FREQUENCY_HZ       433000000ULL

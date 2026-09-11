@@ -213,14 +213,12 @@
         </logicalFolder>
       </logicalFolder>
       <logicalFolder name="drivers" displayName="drivers" projectFiles="true">
+        <logicalFolder name="sensors" displayName="sensors" projectFiles="true">
+          <itemPath>../src/drivers/sensors/DHT11.c</itemPath>
+        </logicalFolder>
         <logicalFolder name="sx1278" displayName="sx1278" projectFiles="true">
           <itemPath>../src/drivers/sx1278/SX1278.c</itemPath>
           <itemPath>../src/drivers/sx1278/SX1278_hw.c</itemPath>
-        </logicalFolder>
-      </logicalFolder>
-      <logicalFolder name="mylib" displayName="mylib" projectFiles="true">
-        <logicalFolder name="sensors" displayName="sensors" projectFiles="true">
-          <itemPath>../src/mylib/sensors/DHT11.c</itemPath>
         </logicalFolder>
       </logicalFolder>
       <itemPath>../src/main.c</itemPath>

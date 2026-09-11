@@ -4,6 +4,15 @@
     <logicalFolder name="HeaderFiles"
                    displayName="Header Files"
                    projectFiles="true">
+      <logicalFolder name="app" displayName="app" projectFiles="true">
+        <itemPath>../src/app/lora_app.h</itemPath>
+        <itemPath>../src/app/node_response.h</itemPath>
+        <itemPath>../src/app/node_state.h</itemPath>
+      </logicalFolder>
+      <logicalFolder name="protocol" displayName="protocol" projectFiles="true">
+        <itemPath>../src/protocol/crc16.h</itemPath>
+        <itemPath>../src/protocol/node_packet.h</itemPath>
+      </logicalFolder>
       <logicalFolder name="config" displayName="config" projectFiles="true">
         <logicalFolder name="default" displayName="default" projectFiles="true">
           <logicalFolder name="peripheral" displayName="peripheral" projectFiles="true">
@@ -174,6 +183,12 @@
                    projectFiles="true">
       <logicalFolder name="app" displayName="app" projectFiles="true">
         <itemPath>../src/app/lora_app.c</itemPath>
+        <itemPath>../src/app/node_response.c</itemPath>
+        <itemPath>../src/app/node_state.c</itemPath>
+      </logicalFolder>
+      <logicalFolder name="protocol" displayName="protocol" projectFiles="true">
+        <itemPath>../src/protocol/crc16.c</itemPath>
+        <itemPath>../src/protocol/node_packet.c</itemPath>
       </logicalFolder>
       <logicalFolder name="config" displayName="config" projectFiles="true">
         <logicalFolder name="default" displayName="default" projectFiles="true">
@@ -228,6 +243,7 @@
     <Elem>../src/drivers</Elem>
     <Elem>../src/app</Elem>
     <Elem>../src/mylib</Elem>
+    <Elem>../src/protocol</Elem>
   </sourceRootList>
   <projectmakefile>Makefile</projectmakefile>
   <confs>

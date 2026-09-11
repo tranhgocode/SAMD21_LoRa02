@@ -1,127 +1,181 @@
-# LoRa-02 (SX1278) with SAM D21
+# LoRa V1 Sensor Node
 
-This project demonstrates a 433 MHz LoRa link using an Ai-Thinker LoRa-02
-(SX1278) module and an ATSAMD21G17D microcontroller. The transmitter reads
-temperature and relative humidity from a DHT11 sensor, sends the values every
-two seconds, and reports its state through the debug UART. The same application
-can also be built as a LoRa receiver.
+## Overview
 
-## Hardware
+This repository contains firmware for a continuously powered LoRa sensor node
+built with an ATSAMD21G17D, an Ai-Thinker LoRa-02/SX1278, and a DHT11 sensor.
+The node waits for a `POLL` from a gateway, reads the sensor, transmits one
+`DATA` or `ERROR` packet, and waits up to 1000 ms for a matching `ACK`.
 
-- SAM D21 Curiosity Nano board with an ATSAMD21G17D
-- Ai-Thinker LoRa-02 (SX1278) 433 MHz module
-- 433 MHz antenna
-- DHT11 temperature and humidity sensor for transmitter mode
-- Stable 3.3 V supply
+The V1.1 node:
 
-## LoRa-02 pin connections
+- uses one firmware image for both RX and TX;
+- never transmits sensor data periodically;
+- supports only `POLL`, `DATA`, `ACK`, and `ERROR` packets;
+- uses application CRC-16/CCITT-FALSE in addition to SX1278 hardware CRC;
+- increments its 16-bit sequence once when a transaction finishes;
+- does not retry a response at the application layer.
 
-The arrows show the signal direction relative to the SAM D21.
+## Note: Using More Than One Node
 
-| SAM D21 pin | LoRa-02 pin | Purpose                         |
-| ----------- | ----------- | ------------------------------- |
-| `3.3V`      | `VCC`       | 3.3 V power supply              |
-| `GND`       | `GND`       | Common ground                   |
-| `PA16`      | `MOSI`      | SPI data from the MCU           |
-| `PA17`      | `SCK`       | SPI clock                       |
-| `PA19`      | `MISO`      | SPI data from the LoRa-02       |
-| `PA18`      | `NSS / CS`  | Active-low SPI chip select      |
-| `PA10`      | `RESET`     | Active-low hardware reset       |
-| `PA11`      | `DIO0`      | `TxDone` or `RxDone` indication |
-
-The LoRa-02 `DIO1` through `DIO5` pins are not used by this application
-
-## DHT11 connection
-
-The DHT11 data line is configured on `PA00`. Power the sensor from 3.3 V and
-connect its ground to the board ground. Add a pull-up resistor on the data line
-if the DHT11 module does not already include one.
-
-| SAM D21 pin | DHT11 pin | Purpose                 |
-| ----------- | --------- | ----------------------- |
-| `3.3V`      | `VCC`     | Sensor power            |
-| `GND`       | `GND`     | Common ground           |
-| `PA00`      | `DATA`    | Single-wire sensor data |
-
-## Interface configuration
-
-- LoRa carrier frequency: 433 MHz
-- Spreading factor: SF7
-- Signal bandwidth: 125 kHz
-- Coding rate: 4/5
-- Payload CRC: enabled
-- Transmit power setting: 17 dBm
-- SPI: `SERCOM1`, master mode, Mode 0, MSB first, 1 MHz
-- Debug UART: `SERCOM5`, 115200 baud, 8-N-1 (transmit only)
-- UART TX: `PA22`
-- `PB22` is assigned to the SERCOM5 RX function in the pin configuration, but
-  this application does not enable or use UART reception
-
-## Selecting transmitter or receiver mode
-
-Set `LORA_APP_ROLE` in `src/app/lora_app.h` before building the firmware.
-
-For the transmitter:
+Each physical node must use a unique address. Before building firmware for a
+node, change `LORA_APP_NODE_ADDRESS` in `src/app/lora_app.c`:
 
 ```c
-#define LORA_APP_ROLE LORA_APP_ROLE_TRANSMITTER
+/* Node 1 */
+#define LORA_APP_NODE_ADDRESS 0x01U
+
+/* Node 2 */
+#define LORA_APP_NODE_ADDRESS 0x02U
 ```
 
-For the receiver:
+Build and flash each board separately after selecting its address. Valid node
+addresses are `0x01` through `0xFE`, `0x00` belongs to the gateway and `0xFF`
+is reserved. The gateway must set `Dest` to the intended node address in each
+`POLL` and `ACK`. Rebuilding overwrites the default `.hex` output, so copy or
+rename each image, for example `node_01.hex` and `node_02.hex`, before building
+the next node.
 
-```c
-#define LORA_APP_ROLE LORA_APP_ROLE_RECEIVER
+## Architecture
+
+Hardware access is kept in the integration and driver layers. The state,
+response, packet, and CRC modules are pure C and can be tested on a host PC.
+
+```mermaid
+flowchart TD
+    MAIN[main.c] --> APP[lora_app]
+    APP --> STATE[node_state]
+    APP --> RESPONSE[node_response]
+    STATE --> PACKET[node_packet]
+    RESPONSE --> PACKET
+    PACKET --> CRC[crc16]
+    APP --> DHT[DHT11 driver]
+    APP --> RADIO[SX1278 driver]
+    APP --> UART[SERCOM5 UART]
+    RADIO --> PLATFORM[SAMD21 SPI and GPIO]
 ```
 
-A complete link test requires two boards and two LoRa-02 modules. Flash one
-board as the transmitter and the other as the receiver. Both radios must use
-the same frequency, spreading factor, bandwidth, coding rate, CRC setting, and
-sync word.
+| Path | Responsibility |
+| --- | --- |
+| `src/main.c` | Initializes Harmony and repeatedly runs the app and `SYS_Tasks()` |
+| `src/app/lora_app.*` | Integrates radio RX/TX, DHT11, UART logging, and timer ticks |
+| `src/app/node_state.*` | Controls `WAIT_POLL`, `WAIT_TX_RESULT`, and `WAIT_ACK` |
+| `src/app/node_response.*` | Builds `DATA` or `ERROR` responses |
+| `src/protocol/node_packet.*` | Validates, encodes, and decodes V1 packets |
+| `src/protocol/crc16.*` | Calculates CRC-16/CCITT-FALSE |
+| `src/drivers/` | Contains DHT11, SX1278, and SAM D21 hardware access |
+| `src/config/default/` | Contains generated MPLAB Harmony configuration |
+| `lora_TX.X/` | Contains the MPLAB X project |
 
-## Building and running
+## Packet Flow
 
-1. Open `lora_TX.X` in MPLAB X IDE.
-2. Select the installed XC32 compiler and build the `default` configuration.
-3. Connect the hardware according to the tables above.
-4. Attach a 433 MHz antenna before enabling the transmitter.
-5. Program the board and open the debug UART at 115200 baud, 8 data bits, no
-   parity, and 1 stop bit.
+```mermaid
+sequenceDiagram
+    participant G as Gateway
+    participant N as Sensor Node
+    participant D as DHT11
 
-## UART log format
+    G->>N: POLL (ID)
+    N->>D: Read temperature and humidity
+    alt Valid sensor sample
+        N-->>G: DATA (same ID, current Seq)
+    else Sensor or packet-build failure
+        N-->>G: ERROR (same ID, current Seq)
+    end
+    alt Matching ACK within 1000 ms
+        G->>N: ACK (same ID and Seq)
+        N->>N: Seq++, return to WAIT_POLL
+    else TX failure or ACK timeout
+        N->>N: Log locally, Seq++, return to WAIT_POLL
+    end
+```
 
-Every complete UART log line begins with a lowercase category prefix:
+All packets use this wire layout:
 
-- `status: ` reports normal operation.
-- `error: ` reports an initialization, sensor, timeout, or communication error.
+```text
+Type | Src | Dest | ID | Len | Payload | Seq | CRC
+ 1 B   1 B   1 B   1 B   1 B    Len B    2 B   2 B
+```
 
-Example transmitter output:
+Multi-byte fields are big-endian. The gateway address is `0x00`, the current
+node address is `0x01`, and the maximum packet length is 64 bytes. An invalid
+length, Type, address, direction, or CRC causes the packet to be ignored.
+
+## Pin Table
+
+All signals use 3.3 V logic. Signal direction is relative to the SAM D21.
+
+| SAM D21 pin | Connected device pin | Direction | Purpose |
+| --- | --- | --- | --- |
+| `3.3V` | LoRa-02 `VCC` | Power | Radio supply |
+| `GND` | LoRa-02 `GND` | Power | Common ground |
+| `PA16` | LoRa-02 `MOSI` | Output | SERCOM1 SPI data to radio |
+| `PA17` | LoRa-02 `SCK` | Output | SERCOM1 SPI clock |
+| `PA19` | LoRa-02 `MISO` | Input | SERCOM1 SPI data from radio |
+| `PA18` | LoRa-02 `NSS/CS` | Output | Active-low chip select |
+| `PA10` | LoRa-02 `RESET` | Output | Active-low radio reset |
+| `PA11` | LoRa-02 `DIO0` | Input | `RxDone` and `TxDone` indication |
+| `3.3V` | DHT11 `VCC` | Power | Sensor supply |
+| `GND` | DHT11 `GND` | Power | Common ground |
+| `PA00` | DHT11 `DATA` | Bidirectional | Single-wire sensor data |
+| `PA22` | UART adapter RX | Output | SERCOM5 debug UART TX |
+
+Use a pull-up resistor on DHT11 DATA if the sensor module does not include one.
+Attach a 433 MHz antenna before transmitting, and never apply 5 V to the radio
+or MCU GPIO pins.
+
+## Build
+
+Required toolchain:
+
+- MPLAB X IDE v6.30
+- MPLAB XC32 v5.10
+- Microchip SAMD21 DFP 3.7.262.
+
+Open `lora_TX.X` in MPLAB X and build the `default` configuration, or run the
+following commands from the repository root after adding the MPLAB/XC32 tools
+to `PATH`:
+
+```powershell
+make -C lora_TX.X CONF=default build
+make -C lora_TX.X CONF=default clean
+```
+
+The production image is generated at:
+
+```text
+lora_TX.X/dist/default/production/lora_TX.X.production.hex
+```
+
+Program the board through MPLAB X and monitor SERCOM5 at 115200 baud, 8 data
+bits, no parity, and 1 stop bit.
+
+## Log Output
+
+
+```
+
+UART lines start with `status:` for normal events or `error:` for failures.
+Binary packets are always logged with an explicit length and hexadecimal bytes;
+they are never printed as C strings.
 
 ```text
 status: LoRa-02 configuration: 433 MHz, SF7, BW125, CR4/5, CRC enabled
-status: transmitter ready; sending DHT11 data every 2 seconds
-status: sent: T=25.0C H=60.0%
+status: sensor node ready; waiting for POLL
+status: rx len=9 hex=01 00 01 2A 00 00 00 BC 1B
+status: tx len=13 hex=02 01 00 2A 04 00 FA 02 58 00 00 53 D4
+status: ACK accepted
 ```
 
-Example receiver output:
+Typical failure messages include:
 
 ```text
-status: LoRa-02 configuration: 433 MHz, SF7, BW125, CR4/5, CRC enabled
-status: receiver ready; waiting for LoRa packets
-status: received: T=25.0C H=60.0%
+error: DHT11 initialization failed
+error: LoRa TX failed
+status: ACK timeout
+status: RX frame ignored
 ```
 
-If the radio cannot be detected, the UART reports:
-
-```text
-error: SX1278 was not detected; check power and SPI wiring
-```
-
-## Hardware notes
-
-- Never apply 5 V to the LoRa-02 or to a SAM D21 GPIO pin.
-- Attach a 433 MHz antenna before transmitting.
-- Keep SPI wires short and use a reliable common-ground connection.
-- Ensure that the 3.3 V supply can provide the radio's peak transmit current.
-  Place a decoupling capacitor close to the LoRa-02 if the supply is unstable.
-- If the pin mapping is changed in MPLAB Code Configurator, regenerate the
-  Harmony configuration and update the SX1278 hardware abstraction layer.
+Host tests and firmware builds do not replace radio hardware verification. A
+gateway fixture and two compatible radios are still required to verify RF
+timing, error injection, and long-running transactions.

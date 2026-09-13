@@ -131,12 +131,22 @@ void SX1278_clearLoRaIrq(SX1278_t *module) {
 	SX1278_SPIWrite(module, LR_RegIrqFlags, 0xFF);
 }
 
-int SX1278_LoRaEntryRx(SX1278_t *module, uint8_t length, uint32_t timeout) {
+int SX1278_LoRaEntryRx(SX1278_t *module, uint8_t length) {
 	uint8_t addr;
 
+	/*
+	 * Common modem settings are applied once by SX1278_init(). Re-running
+	 * SX1278_config() here puts the radio to sleep for 15 ms, which can make a
+	 * node miss the gateway ACK while turning around from TX to RX.
+	 *
+	 * RxContinuous starts when RegOpMode is written; RxOngoing in RegModemStat
+	 * describes packet activity and must not be used as a mode-ready signal.
+	 * See the SX1276/77/78/79 data sheet, sections 4.1.5 and 6.1:
+	 * https://www.semtech.com/products/wireless-rf/lora-connect/sx1278
+	 */
 	module->packetLength = length;
 
-	SX1278_config(module);		//Setting base parameter
+	SX1278_standby(module);
 	SX1278_SPIWrite(module, REG_LR_PADAC, 0x84);	//Normal and RX
 	SX1278_SPIWrite(module, LR_RegHopPeriod, 0xFF);	//No FHSS
 	SX1278_SPIWrite(module, REG_LR_DIOMAPPING1, 0x01);//DIO=00,DIO1=00,DIO2=00, DIO3=01
@@ -149,18 +159,9 @@ int SX1278_LoRaEntryRx(SX1278_t *module, uint8_t length, uint32_t timeout) {
 	//SX1278_SPIWrite(module, LR_RegOpMode,0x05);	//Continuous Rx Mode //High Frequency Mode
 	module->readBytes = 0;
 
-	while (1) {
-		if ((SX1278_SPIRead(module, LR_RegModemStat) & 0x04) == 0x04) {	//Rx-on going RegModemStat
-			module->status = RX;
-			return 1;
-		}
-		if (--timeout == 0) {
-			SX1278_hw_Reset(module->hw);
-			SX1278_config(module);
-			return 0;
-		}
-		SX1278_hw_DelayMs(1);
-	}
+
+	module->status = RX;
+	return 1;
 }
 
 uint8_t SX1278_LoRaRxPacket(SX1278_t *module) {
@@ -260,8 +261,8 @@ int SX1278_transmit(SX1278_t *module, uint8_t *txBuf, uint8_t length,
 	return 0;
 }
 
-int SX1278_receive(SX1278_t *module, uint8_t length, uint32_t timeout) {
-	return SX1278_LoRaEntryRx(module, length, timeout);
+int SX1278_receive(SX1278_t *module, uint8_t length) {
+	return SX1278_LoRaEntryRx(module, length);
 }
 
 uint8_t SX1278_available(SX1278_t *module) {

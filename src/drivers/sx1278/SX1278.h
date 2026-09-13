@@ -313,12 +313,10 @@ void SX1278_clearLoRaIrq(SX1278_t *module);
  *
  * \param[in]  module	Pointer to LoRa structure
  * \param[in]  length   Length of message to be received
- * \param[in]  timeout  Timeout in [ms]
  *
- * \return     1 if entering reception mode
- *             0 if timeout was exceeded
+ * \return     1 after entering reception mode
  */
-int SX1278_LoRaEntryRx(SX1278_t *module, uint8_t length, uint32_t timeout);
+int SX1278_LoRaEntryRx(SX1278_t *module, uint8_t length);
 
 /**
  * \brief Read data
@@ -404,12 +402,10 @@ int SX1278_transmit(SX1278_t *module, uint8_t *txBuf, uint8_t length,
  *
  * \param[in]  module	Pointer to LoRa structure
  * \param[in]  length   Length of message to be received
- * \param[in]  timeout  Timeout in [ms]
  *
- * \return     1 if entering reception mode
- *             0 if timeout was exceeded
+ * \return     1 after entering reception mode
  */
-int SX1278_receive(SX1278_t *module, uint8_t length, uint32_t timeout);
+int SX1278_receive(SX1278_t *module, uint8_t length);
 
 /**
  * \brief Returns number of received data

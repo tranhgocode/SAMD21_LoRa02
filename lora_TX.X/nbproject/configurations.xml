@@ -9,10 +9,6 @@
         <itemPath>../src/app/node_response.h</itemPath>
         <itemPath>../src/app/node_state.h</itemPath>
       </logicalFolder>
-      <logicalFolder name="protocol" displayName="protocol" projectFiles="true">
-        <itemPath>../src/protocol/crc16.h</itemPath>
-        <itemPath>../src/protocol/node_packet.h</itemPath>
-      </logicalFolder>
       <logicalFolder name="config" displayName="config" projectFiles="true">
         <logicalFolder name="default" displayName="default" projectFiles="true">
           <logicalFolder name="peripheral" displayName="peripheral" projectFiles="true">
@@ -144,6 +140,10 @@
           </logicalFolder>
         </logicalFolder>
       </logicalFolder>
+      <logicalFolder name="protocol" displayName="protocol" projectFiles="true">
+        <itemPath>../src/protocol/crc16.h</itemPath>
+        <itemPath>../src/protocol/node_packet.h</itemPath>
+      </logicalFolder>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -185,10 +185,6 @@
         <itemPath>../src/app/lora_app.c</itemPath>
         <itemPath>../src/app/node_response.c</itemPath>
         <itemPath>../src/app/node_state.c</itemPath>
-      </logicalFolder>
-      <logicalFolder name="protocol" displayName="protocol" projectFiles="true">
-        <itemPath>../src/protocol/crc16.c</itemPath>
-        <itemPath>../src/protocol/node_packet.c</itemPath>
       </logicalFolder>
       <logicalFolder name="config" displayName="config" projectFiles="true">
         <logicalFolder name="default" displayName="default" projectFiles="true">
@@ -235,6 +231,10 @@
           <itemPath>../src/drivers/sx1278/SX1278.c</itemPath>
           <itemPath>../src/drivers/sx1278/SX1278_hw.c</itemPath>
         </logicalFolder>
+      </logicalFolder>
+      <logicalFolder name="protocol" displayName="protocol" projectFiles="true">
+        <itemPath>../src/protocol/crc16.c</itemPath>
+        <itemPath>../src/protocol/node_packet.c</itemPath>
       </logicalFolder>
       <itemPath>../src/main.c</itemPath>
     </logicalFolder>

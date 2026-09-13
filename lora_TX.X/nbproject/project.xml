@@ -12,6 +12,7 @@
                 <sourceRootElem>../src/drivers</sourceRootElem>
                 <sourceRootElem>../src/app</sourceRootElem>
                 <sourceRootElem>../src/mylib</sourceRootElem>
+                <sourceRootElem>../src/protocol</sourceRootElem>
             </sourceRootList>
             <confList>
                 <confElem>

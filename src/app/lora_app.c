@@ -17,7 +17,6 @@
 #define LORA_APP_NODE_ADDRESS            0x01U
 #define LORA_APP_FREQUENCY_HZ            433000000ULL
 #define LORA_APP_PACKET_LENGTH           LORA_PACKET_MAX_LENGTH
-#define LORA_APP_RX_START_TIMEOUT_MS     2U
 #define LORA_APP_TX_TIMEOUT_MS           3000U
 #define LORA_APP_IDLE_DELAY_MS           1U
 #define LORA_APP_SX1278_VERSION_REGISTER 0x42U
@@ -173,6 +172,14 @@ static NODE_RESPONSE_SensorResult LORA_APP_ReadSensor(void)
     return result;
 }
 
+/** Put the radio back into continuous RX without delaying for packet activity. */
+static bool LORA_APP_StartReceiver(void)
+{
+    receiverStarted = SX1278_receive(&loraModule,
+                                     LORA_APP_PACKET_LENGTH) != 0;
+    return receiverStarted;
+}
+
 static void LORA_APP_LogTerminalAction(const NODE_STATE_Action *action)
 {
     switch (action->type)
@@ -256,6 +263,23 @@ static void LORA_APP_BuildAndTransmit(const NODE_STATE_Action *action)
                                   LORA_APP_TX_TIMEOUT_MS) != 0;
     receiverStarted = false;
     LORA_APP_NotifyTxResult(transmitted);
+
+    /*
+     * Arm RX in the same transaction path as TX completion. The gateway may
+     * begin its ACK immediately after receiving DATA, so waiting for the next
+     * application-loop iteration creates an avoidable deaf interval.
+     */
+    if (transmitted)
+    {
+        if (LORA_APP_StartReceiver())
+        {
+            LORA_APP_Print("status: RX ready, waiting for ACK\r\n");
+        }
+        else
+        {
+            LORA_APP_Print("error: receiver start failed after TX\r\n");
+        }
+    }
 }
 
 static void LORA_APP_HandleAction(const NODE_STATE_Action *action)
@@ -336,7 +360,7 @@ bool LORA_APP_Initialize(void)
         return false;
     }
 
-    LORA_APP_Print("status: sensor node ready; waiting for POLL\r\n");
+    LORA_APP_Print("status: sensor node ready, waiting for POLL\r\n");
     return true;
 }
 
@@ -355,10 +379,7 @@ void LORA_APP_Tasks(void)
 
     if (!receiverStarted)
     {
-        receiverStarted = SX1278_receive(&loraModule,
-                                         LORA_APP_PACKET_LENGTH,
-                                         LORA_APP_RX_START_TIMEOUT_MS) != 0;
-        if (!receiverStarted)
+        if (!LORA_APP_StartReceiver())
         {
             LORA_APP_Print("error: receiver start failed\r\n");
             LORA_APP_IdleTick();

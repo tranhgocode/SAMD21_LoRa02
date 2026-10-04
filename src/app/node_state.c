@@ -11,81 +11,45 @@ static bool NODE_STATE_IsNodeAddress(uint8_t address)
            (address <= LORA_PACKET_MAX_NODE_ADDRESS);
 }
 
-static bool NODE_STATE_IsSensorCoolingDown(const NODE_STATE_Context *context,
-                                           uint32_t tickMs)
-{
-    uint32_t elapsedMs;
-
-    if (!context->has_sensor_request)
-    {
-        return false;
-    }
-
-    /* Unsigned subtraction keeps elapsed time correct across tick wrap. */
-    elapsedMs = tickMs - context->last_sensor_request_tick_ms;
-    return elapsedMs < context->sensor_cooldown_ms;
-}
-
 static void NODE_STATE_CompleteTransaction(NODE_STATE_Context *context,
                                            NODE_STATE_Action *action,
-                                           NODE_STATE_ActionType actionType)
+                                           NODE_STATE_ActionType actionType,
+                                           uint32_t tickMs)
 {
     /* The explicit cast documents the intended 0xFFFF-to-zero wrap. */
     context->response_sequence =
         (uint16_t)(context->response_sequence + 1U);
-    context->state = NODE_STATE_WAIT_POLL;
+    context->state = NODE_STATE_WAIT_INTERVAL;
+    context->interval_started_tick_ms = tickMs;
+    context->transaction_id = (uint8_t)(context->transaction_id + 1U);
     context->pending_transaction_id = 0U;
     context->pending_sequence = 0U;
     context->ack_started_tick_ms = 0U;
     action->type = actionType;
 }
 
-static void NODE_STATE_HandleWaitPoll(NODE_STATE_Context *context,
-                                      const NODE_STATE_Event *event,
-                                      NODE_STATE_Action *action)
+static void NODE_STATE_HandleWaitInterval(NODE_STATE_Context *context,
+                                          const NODE_STATE_Event *event,
+                                          NODE_STATE_Action *action)
 {
-    LORA_PACKET_Message packet;
-
-    if (event->type != NODE_STATE_EVENT_FRAME_RECEIVED)
+    if (event->type != NODE_STATE_EVENT_TIMER_TICK)
     {
         action->ignore_reason = NODE_STATE_IGNORE_UNEXPECTED_EVENT;
         return;
     }
 
-    if (!LORA_PACKET_Decode(event->frame, event->frame_length, &packet))
+    /* Unsigned elapsed time is valid across the millisecond counter wrap. */
+    if ((event->tick_ms - context->interval_started_tick_ms) <
+        NODE_STATE_INTERVAL_MS)
     {
-        action->ignore_reason = NODE_STATE_IGNORE_INVALID_PACKET;
         return;
     }
 
-    if (packet.destination != context->node_address)
-    {
-        action->ignore_reason = NODE_STATE_IGNORE_WRONG_DESTINATION;
-        return;
-    }
-
-    if (packet.type != LORA_PACKET_TYPE_POLL)
-    {
-        action->ignore_reason = NODE_STATE_IGNORE_UNEXPECTED_TYPE;
-        return;
-    }
-
-    /* Freeze the ID and sequence until TX and ACK processing is complete. */
-    context->pending_transaction_id = packet.transaction_id;
+    context->pending_transaction_id = context->transaction_id;
     context->pending_sequence = context->response_sequence;
     context->state = NODE_STATE_WAIT_TX_RESULT;
-    action->transaction_id = packet.transaction_id;
-    action->sequence = context->response_sequence;
-
-    if (NODE_STATE_IsSensorCoolingDown(context, event->tick_ms))
-    {
-        action->type = NODE_STATE_ACTION_SEND_ERROR;
-        action->error_code = LORA_PACKET_ERROR_DHT_READ_FAILED;
-        return;
-    }
-
-    context->last_sensor_request_tick_ms = event->tick_ms;
-    context->has_sensor_request = true;
+    action->transaction_id = context->pending_transaction_id;
+    action->sequence = context->pending_sequence;
     action->type = NODE_STATE_ACTION_READ_SENSOR;
 }
 
@@ -104,7 +68,7 @@ static void NODE_STATE_HandleWaitTxResult(NODE_STATE_Context *context,
     {
         NODE_STATE_CompleteTransaction(context,
                                        action,
-                                       NODE_STATE_ACTION_TX_FAILED);
+                                       NODE_STATE_ACTION_TX_FAILED, event->tick_ms);
         return;
     }
 
@@ -123,7 +87,7 @@ static void NODE_STATE_HandleWaitAck(NODE_STATE_Context *context,
     {
         NODE_STATE_CompleteTransaction(context,
                                        action,
-                                       NODE_STATE_ACTION_ACK_TIMEOUT);
+                                       NODE_STATE_ACTION_ACK_TIMEOUT, event->tick_ms);
         return;
     }
 
@@ -165,12 +129,12 @@ static void NODE_STATE_HandleWaitAck(NODE_STATE_Context *context,
 
     NODE_STATE_CompleteTransaction(context,
                                    action,
-                                   NODE_STATE_ACTION_TRANSACTION_COMPLETE);
+                                   NODE_STATE_ACTION_TRANSACTION_COMPLETE, event->tick_ms);
 }
 
 bool NODE_STATE_Initialize(NODE_STATE_Context *context,
                            uint8_t node_address,
-                           uint32_t sensor_cooldown_ms)
+                           uint32_t tick_ms)
 {
     NODE_STATE_Context initialized = {0};
 
@@ -179,9 +143,9 @@ bool NODE_STATE_Initialize(NODE_STATE_Context *context,
         return false;
     }
 
-    initialized.state = NODE_STATE_WAIT_POLL;
+    initialized.state = NODE_STATE_WAIT_INTERVAL;
     initialized.node_address = node_address;
-    initialized.sensor_cooldown_ms = sensor_cooldown_ms;
+    initialized.interval_started_tick_ms = tick_ms;
     *context = initialized;
     return true;
 }
@@ -199,8 +163,8 @@ bool NODE_STATE_HandleEvent(NODE_STATE_Context *context,
 
     switch (context->state)
     {
-        case NODE_STATE_WAIT_POLL:
-            NODE_STATE_HandleWaitPoll(context, event, &nextAction);
+        case NODE_STATE_WAIT_INTERVAL:
+            NODE_STATE_HandleWaitInterval(context, event, &nextAction);
             break;
 
         case NODE_STATE_WAIT_TX_RESULT:

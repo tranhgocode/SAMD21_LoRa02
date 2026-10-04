@@ -19,10 +19,13 @@ extern "C" {
 /** Maximum time to wait for a matching ACK after a successful transmission. */
 #define NODE_STATE_ACK_TIMEOUT_MS 1000U
 
+/** Powered idle interval after initialization or the end of each cycle. */
+#define NODE_STATE_INTERVAL_MS 60000U
+
 /** States in one node response transaction. */
 typedef enum
 {
-    NODE_STATE_WAIT_POLL = 0U,
+    NODE_STATE_WAIT_INTERVAL = 0U,
     NODE_STATE_WAIT_TX_RESULT,
     NODE_STATE_WAIT_ACK
 } NODE_STATE_State;
@@ -41,7 +44,6 @@ typedef enum
 {
     NODE_STATE_ACTION_NONE = 0U,
     NODE_STATE_ACTION_READ_SENSOR,
-    NODE_STATE_ACTION_SEND_ERROR,
     NODE_STATE_ACTION_TRANSACTION_COMPLETE,
     NODE_STATE_ACTION_ACK_TIMEOUT,
     NODE_STATE_ACTION_TX_FAILED
@@ -74,7 +76,6 @@ typedef struct
     NODE_STATE_IgnoreReason ignore_reason;
     uint8_t transaction_id;
     uint16_t sequence;
-    LORA_PACKET_ErrorCode error_code;
 } NODE_STATE_Action;
 
 /** Persistent state owned by one sensor node. */
@@ -86,20 +87,19 @@ typedef struct
     uint8_t pending_transaction_id;
     uint16_t pending_sequence;
     uint32_t ack_started_tick_ms;
-    uint32_t sensor_cooldown_ms;
-    uint32_t last_sensor_request_tick_ms;
-    bool has_sensor_request;
+    uint32_t interval_started_tick_ms;
+    uint8_t transaction_id;
 } NODE_STATE_Context;
 
 /**
- * Initialize a node in WAIT_POLL.
+ * Initialize a node in WAIT_INTERVAL.
  *
- * sensor_cooldown_ms is supplied by the integration layer so this pure module
- * does not depend on the DHT11 driver.
+ * tick_ms is the real elapsed timestamp at initialization. The first sample
+ * starts after NODE_STATE_INTERVAL_MS; ID and Seq begin at zero in RAM.
  */
 bool NODE_STATE_Initialize(NODE_STATE_Context *context,
                            uint8_t node_address,
-                           uint32_t sensor_cooldown_ms);
+                           uint32_t tick_ms);
 
 /**
  * Handle one received frame without invoking radio or sensor drivers.

@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-/** Configure and verify the LoRa-02. Returns false when RegVersion is invalid. */
+/** Configure and verify the LoRa-02. Returns false on timer or radio initialization failure. */
 bool LORA_APP_Initialize(void);
 
 /** Run one bounded node iteration, then return control to SYS_Tasks(). */

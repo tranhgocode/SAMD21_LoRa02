@@ -4,17 +4,26 @@
 
 This repository contains firmware for a continuously powered LoRa sensor node
 built with an ATSAMD21G17D, an Ai-Thinker LoRa-02/SX1278, and a DHT11 sensor.
-The node waits for a `POLL` from a gateway, reads the sensor, transmits one
-`DATA` or `ERROR` packet, and waits up to 1000 ms for a matching `ACK`.
+After initialization, the node waits 60 seconds, reads DHT11 once, sends one
+`DATA` or `ERROR` packet, immediately arms RX, and waits for a matching `ACK`.
+It ends the cycle on ACK, ACK timeout, or TX failure, then waits another
+60 seconds from the end of the cycle. There is no application retry.
 
-The V1.1 node:
+This is **MVP2: continuously powered autonomous uplink**. It does not enter MCU
+sleep or use RTC wakeup; those belong to MVP3. The legacy `POLL` packet remains
+in the wire codec but no longer triggers sampling. A gateway must accept
+unsolicited `DATA`/`ERROR` and echo the node's ID/Seq in its ACK; a gateway that
+only polls nodes must be updated separately.
 
-- uses one firmware image for both RX and TX;
-- never transmits sensor data periodically;
-- supports only `POLL`, `DATA`, `ACK`, and `ERROR` packets;
-- uses application CRC-16/CCITT-FALSE in addition to SX1278 hardware CRC;
-- increments its 16-bit sequence once when a transaction finishes;
-- does not retry a response at the application layer.
+- ACK timeout is 1000 ms from successful blocking TX completion; an ACK
+  observed at exactly 1000 ms is late. Wrong frames never extend the deadline.
+- TX uses the existing driver's bounded 3000 ms timeout argument.
+- The node creates an 8-bit ID and a 16-bit Seq in RAM, initially zero. Both
+  advance once per finished cycle, including TX failure, and wrap naturally.
+  Reset restarts them; duplicate detection across resets is outside this MVP.
+- DATA/ERROR payloads, byte order and CRC-16/CCITT-FALSE remain unchanged.
+- Sensor initialization/read/value failure sends one ERROR and still waits
+  for ACK. A local build failure ends the cycle without transmitting.
 
 ## Note: Using More Than One Node
 
@@ -32,7 +41,7 @@ node, change `LORA_APP_NODE_ADDRESS` in `src/app/lora_app.c`:
 Build and flash each board separately after selecting its address. Valid node
 addresses are `0x01` through `0xFE`, `0x00` belongs to the gateway and `0xFF`
 is reserved. The gateway must set `Dest` to the intended node address in each
-`POLL` and `ACK`. Rebuilding overwrites the default `.hex` output, so copy or
+`ACK`. Rebuilding overwrites the default `.hex` output, so copy or
 rename each image, for example `node_01.hex` and `node_02.hex`, before building
 the next node.
 
@@ -59,7 +68,8 @@ flowchart TD
 | --- | --- |
 | `src/main.c` | Initializes Harmony and repeatedly runs the app and `SYS_Tasks()` |
 | `src/app/lora_app.*` | Integrates radio RX/TX, DHT11, UART logging, and timer ticks |
-| `src/app/node_state.*` | Controls `WAIT_POLL`, `WAIT_TX_RESULT`, and `WAIT_ACK` |
+| `src/app/app_time.h` | Reserves TC4/TC5 for a free-running elapsed-time counter |
+| `src/app/node_state.*` | Controls `WAIT_INTERVAL`, `WAIT_TX_RESULT`, and `WAIT_ACK` |
 | `src/app/node_response.*` | Builds `DATA` or `ERROR` responses |
 | `src/protocol/node_packet.*` | Validates, encodes, and decodes V1 packets |
 | `src/protocol/crc16.*` | Calculates CRC-16/CCITT-FALSE |
@@ -75,18 +85,19 @@ sequenceDiagram
     participant N as Sensor Node
     participant D as DHT11
 
-    G->>N: POLL (ID)
-    N->>D: Read temperature and humidity
+    N->>N: Wait 60 seconds; create ID and Seq
+    N->>D: Read temperature and humidity once
     alt Valid sensor sample
-        N-->>G: DATA (same ID, current Seq)
-    else Sensor or packet-build failure
-        N-->>G: ERROR (same ID, current Seq)
+        N-->>G: DATA (node ID, current Seq)
+    else Sensor failure
+        N-->>G: ERROR (node ID, current Seq)
     end
-    alt Matching ACK within 1000 ms
+    N->>N: Arm RX immediately after TX completion
+    alt Matching ACK before 1000 ms
         G->>N: ACK (same ID and Seq)
-        N->>N: Seq++, return to WAIT_POLL
+        N->>N: Finish cycle; ID++, Seq++, WAIT_INTERVAL
     else TX failure or ACK timeout
-        N->>N: Log locally, Seq++, return to WAIT_POLL
+        N->>N: Log locally; ID++, Seq++, WAIT_INTERVAL
     end
 ```
 
@@ -98,8 +109,25 @@ Type | Src | Dest | ID | Len | Payload | Seq | CRC
 ```
 
 Multi-byte fields are big-endian. The gateway address is `0x00`, the current
-node address is `0x01`, and the maximum packet length is 64 bytes. An invalid
+node address is `0x02`, and the maximum packet length is 64 bytes. An invalid
 length, Type, address, direction, or CRC causes the packet to be ignored.
+
+## Elapsed Time
+
+`src/app/app_time.h` reserves the unused **TC4/TC5 pair** as a 32-bit counter
+clocked by GCLK0 (48 MHz) with a /1024 prescaler. Continuous synchronized COUNT
+reads and fractional millisecond accumulation count sensor, TX and UART work;
+loop iteration counts do not determine deadlines. SysTick remains available to
+the existing DHT11/radio delay routines. The CPU and radio stay powered during
+`WAIT_INTERVAL`; the application does not poll RX in that state.
+
+The timer follows the [Microchip SAM D21/DA1 datasheet](https://ww1.microchip.com/downloads/aemDocuments/documents/MCU32/ProductDocuments/DataSheets/SAM-D21-DA1-Family-Data-Sheet-DS40001882.pdf)
+TC pairing and READREQ COUNT synchronization contract. Clock/reset/synchronization
+initialization waits are bounded and failure prevents application startup.
+The timebase must be sampled at least once per hardware counter wrap (about
+25 hours); normal operation samples it every application iteration. Timing
+accuracy depends on the existing GCLK0 oscillator configuration. Generated
+Harmony configuration is unchanged. Timer/RF accuracy still requires a board test.
 
 ## Pin Table
 
@@ -150,32 +178,46 @@ lora_TX.X/dist/default/production/lora_TX.X.production.hex
 Program the board through MPLAB X and monitor SERCOM5 at 115200 baud, 8 data
 bits, no parity, and 1 stop bit.
 
+## Host Tests
+
+With GNU make and a C11 GCC-compatible compiler on PATH, run from the root:
+
+```powershell
+make -C tests test
+make -C tests/packet test
+```
+
+The suites cover packet/CRC contracts, sensor error responses, autonomous
+scheduling, ACK mismatch and boundary deadlines, TX/RX failure, ID/Seq and time
+wrap, and timer conversion. They compile with `-Wall -Wextra -Werror -pedantic`.
+`make -C tests clean` removes only the named test executables. Tests are portable
+host C; the hardware timer register setup and RF link still need board validation.
+
 ## Log Output
 
-
-```
-
 UART lines start with `status:` for normal events or `error:` for failures.
-Binary packets are always logged with an explicit length and hexadecimal bytes;
-they are never printed as C strings.
+Binary packets are logged with an explicit length and hexadecimal bytes.
+The readiness message is:
 
 ```text
-status: LoRa-02 configuration: 433 MHz, SF7, BW125, CR4/5, CRC enabled
-status: sensor node ready; waiting for POLL
-status: rx len=9 hex=01 00 01 2A 00 00 00 BC 1B
-status: tx len=13 hex=02 01 00 2A 04 00 FA 02 58 00 00 53 D4
+status: sensor node ready, first uplink in 60 seconds
+```
+
+Each cycle logs `status: tx len=... hex=...`, then successful TX logs
+`status: RX ready, waiting for ACK`. Terminal outcomes include:
+
+```text
 status: ACK accepted
-```
-
-Typical failure messages include:
-
-```text
-error: DHT11 initialization failed
-error: LoRa TX failed
 status: ACK timeout
-status: RX frame ignored
+error: LoRa TX failed
 ```
 
-Host tests and firmware builds do not replace radio hardware verification. A
-gateway fixture and two compatible radios are still required to verify RF
-timing, error injection, and long-running transactions.
+Other diagnostics include DHT11 initialization failure, RX setup failure and
+`status: RX frame ignored`. RX observations are timestamped before UART logging;
+post-TX logs count toward the ACK deadline, and terminal logging finishes before
+the next 60-second interval starts.
+
+Host tests and firmware builds do not replace hardware verification. No hardware
+UART trace has been captured for MVP2. A compatible gateway and two radios are
+required to verify valid/wrong/missing ACKs, sensor/TX errors, actual timing and
+long-running cycles. MCU sleep, RTC wakeup and power measurements remain MVP3.

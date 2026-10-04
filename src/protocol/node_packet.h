@@ -34,7 +34,7 @@ extern "C" {
 /** The only four packet types accepted by protocol V1. */
 typedef enum
 {
-    /* The gateway asks a node to take a new sensor sample. */
+    /* Legacy gateway request; the MVP2 node ignores POLL. */
     LORA_PACKET_TYPE_POLL = 0x01U,
     /* A node returns valid temperature and humidity data. */
     LORA_PACKET_TYPE_DATA = 0x02U,
@@ -68,13 +68,13 @@ typedef struct
     uint8_t source;
     /** Address of the receiver. */
     uint8_t destination;
-    /** ID assigned by the gateway and echoed in DATA, ERROR, and ACK. */
+    /** ID assigned by the node for each uplink; gateway echoes it in ACK. */
     uint8_t transaction_id;
     /** Number of payload bytes currently in use. */
     uint8_t payload_length;
     /** Payload storage; only the first payload_length bytes are meaningful. */
     uint8_t payload[LORA_PACKET_MAX_PAYLOAD_LENGTH];
-    /** Response sequence, serialized as a 16-bit big-endian value. */
+    /** Node-owned cycle sequence, serialized as a 16-bit big-endian value. */
     uint16_t sequence;
 } LORA_PACKET_Message;
 

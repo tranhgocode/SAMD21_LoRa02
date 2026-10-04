@@ -11,10 +11,12 @@
 #include "definitions.h"
 #include "app/node_response.h"
 #include "app/node_state.h"
+#include "app/app_time.h"
 #include "drivers/sensors/DHT11.h"
 #include "drivers/sx1278/SX1278.h"
 
-#define LORA_APP_NODE_ADDRESS            0x01U
+// #define LORA_APP_NODE_ADDRESS            0x01U
+#define LORA_APP_NODE_ADDRESS            0x02U                      // address of this sensor node
 #define LORA_APP_FREQUENCY_HZ            433000000ULL
 #define LORA_APP_PACKET_LENGTH           LORA_PACKET_MAX_LENGTH
 #define LORA_APP_TX_TIMEOUT_MS           3000U
@@ -33,7 +35,7 @@ static NODE_STATE_Context nodeContext;
 static bool loraReady;
 static bool dht11Ready;
 static bool receiverStarted;
-static uint32_t appTickMs;
+
 
 static void LORA_APP_Print(const char *text)
 {
@@ -201,7 +203,7 @@ static void LORA_APP_LogTerminalAction(const NODE_STATE_Action *action)
     }
 }
 
-static void LORA_APP_NotifyTxResult(bool succeeded)
+static void LORA_APP_NotifyTxResult(bool succeeded, uint32_t tickMs)
 {
     NODE_STATE_Event event =
     {
@@ -209,7 +211,7 @@ static void LORA_APP_NotifyTxResult(bool succeeded)
                             NODE_STATE_EVENT_TX_FAILED,
         .frame = NULL,
         .frame_length = 0U,
-        .tick_ms = appTickMs
+        .tick_ms = tickMs
     };
     NODE_STATE_Action action;
 
@@ -220,6 +222,10 @@ static void LORA_APP_NotifyTxResult(bool succeeded)
     }
 
     LORA_APP_LogTerminalAction(&action);
+    if (action.type == NODE_STATE_ACTION_TX_FAILED)
+    {
+        nodeContext.interval_started_tick_ms = LORA_APP_TIME_NowMs();
+    }
 }
 
 static void LORA_APP_BuildAndTransmit(const NODE_STATE_Action *action)
@@ -234,15 +240,9 @@ static void LORA_APP_BuildAndTransmit(const NODE_STATE_Action *action)
     size_t frameLength = 0U;
     NODE_RESPONSE_BuildResult buildResult;
     bool transmitted;
+    uint32_t txCompletedTickMs;
 
-    if (action->type == NODE_STATE_ACTION_READ_SENSOR)
-    {
-        request.sensor = LORA_APP_ReadSensor();
-    }
-    else
-    {
-        request.sensor.status = NODE_RESPONSE_SENSOR_READ_FAILED;
-    }
+    request.sensor = LORA_APP_ReadSensor();
 
     buildResult = NODE_RESPONSE_Build(&request,
                                       frame,
@@ -252,7 +252,7 @@ static void LORA_APP_BuildAndTransmit(const NODE_STATE_Action *action)
         (buildResult != NODE_RESPONSE_BUILD_ERROR_READY))
     {
         LORA_APP_Print("error: response build failed\r\n");
-        LORA_APP_NotifyTxResult(false);
+        LORA_APP_NotifyTxResult(false, LORA_APP_TIME_NowMs());
         return;
     }
 
@@ -261,8 +261,9 @@ static void LORA_APP_BuildAndTransmit(const NODE_STATE_Action *action)
                                   frame,
                                   (uint8_t)frameLength,
                                   LORA_APP_TX_TIMEOUT_MS) != 0;
+    txCompletedTickMs = LORA_APP_TIME_NowMs();
     receiverStarted = false;
-    LORA_APP_NotifyTxResult(transmitted);
+    LORA_APP_NotifyTxResult(transmitted, txCompletedTickMs);
 
     /*
      * Arm RX in the same transaction path as TX completion. The gateway may
@@ -284,14 +285,20 @@ static void LORA_APP_BuildAndTransmit(const NODE_STATE_Action *action)
 
 static void LORA_APP_HandleAction(const NODE_STATE_Action *action)
 {
-    if ((action->type == NODE_STATE_ACTION_READ_SENSOR) ||
-        (action->type == NODE_STATE_ACTION_SEND_ERROR))
+    if (action->type == NODE_STATE_ACTION_READ_SENSOR)
     {
         LORA_APP_BuildAndTransmit(action);
         return;
     }
 
     LORA_APP_LogTerminalAction(action);
+    if ((action->type == NODE_STATE_ACTION_TRANSACTION_COMPLETE) ||
+        (action->type == NODE_STATE_ACTION_ACK_TIMEOUT) ||
+        (action->type == NODE_STATE_ACTION_TX_FAILED))
+    {
+        /* The next interval begins after terminal UART work has finished. */
+        nodeContext.interval_started_tick_ms = LORA_APP_TIME_NowMs();
+    }
 }
 
 static void LORA_APP_IdleTick(void)
@@ -304,13 +311,15 @@ static void LORA_APP_IdleTick(void)
     };
     NODE_STATE_Action action;
 
-    SX1278_hw_DelayMs(LORA_APP_IDLE_DELAY_MS);
-    appTickMs += LORA_APP_IDLE_DELAY_MS;
-    event.tick_ms = appTickMs;
+    event.tick_ms = LORA_APP_TIME_NowMs();
 
     if (NODE_STATE_HandleEvent(&nodeContext, &event, &action))
     {
         LORA_APP_HandleAction(&action);
+        if (action.type == NODE_STATE_ACTION_NONE)
+        {
+            SX1278_hw_DelayMs(LORA_APP_IDLE_DELAY_MS);
+        }
     }
 }
 
@@ -321,13 +330,9 @@ bool LORA_APP_Initialize(void)
     loraReady = false;
     dht11Ready = false;
     receiverStarted = false;
-    appTickMs = 0U;
-
-    if (!NODE_STATE_Initialize(&nodeContext,
-                               LORA_APP_NODE_ADDRESS,
-                               DHT11_MIN_INTERVAL_MS))
+    if (!LORA_APP_TIME_Initialize())
     {
-        LORA_APP_Print("error: node state initialization failed\r\n");
+        LORA_APP_Print("error: elapsed timer initialization failed\r\n");
         return false;
     }
 
@@ -360,7 +365,13 @@ bool LORA_APP_Initialize(void)
         return false;
     }
 
-    LORA_APP_Print("status: sensor node ready, waiting for POLL\r\n");
+    LORA_APP_Print("status: sensor node ready, first uplink in 60 seconds\r\n");
+    if (!NODE_STATE_Initialize(&nodeContext, LORA_APP_NODE_ADDRESS,
+                               LORA_APP_TIME_NowMs()))
+    {
+        loraReady = false;
+        return false;
+    }
     return true;
 }
 
@@ -373,7 +384,25 @@ void LORA_APP_Tasks(void)
 
     if (!loraReady)
     {
+        SX1278_hw_DelayMs(LORA_APP_IDLE_DELAY_MS);
+        return;
+    }
+
+    if (nodeContext.state != NODE_STATE_WAIT_ACK)
+    {
         LORA_APP_IdleTick();
+        return;
+    }
+
+    /* Check timeout even if RX setup fails or irrelevant traffic is present. */
+    event.type = NODE_STATE_EVENT_TIMER_TICK;
+    event.frame = NULL;
+    event.frame_length = 0U;
+    event.tick_ms = LORA_APP_TIME_NowMs();
+    if (NODE_STATE_HandleEvent(&nodeContext, &event, &action) &&
+        (action.type != NODE_STATE_ACTION_NONE))
+    {
+        LORA_APP_HandleAction(&action);
         return;
     }
 
@@ -394,8 +423,18 @@ void LORA_APP_Tasks(void)
         return;
     }
 
+    event.tick_ms = LORA_APP_TIME_NowMs();
     bytesReceived = SX1278_read(&loraModule, frame, bytesReceived);
     receiverStarted = false;
+    event.type = NODE_STATE_EVENT_FRAME_RECEIVED;
+    event.frame = frame;
+    event.frame_length = bytesReceived;
+    if (!NODE_STATE_HandleEvent(&nodeContext, &event, &action))
+    {
+        LORA_APP_Print("error: state rejected RX event\r\n");
+        return;
+    }
+
     if (bytesReceived <= LORA_PACKET_MAX_LENGTH)
     {
         LORA_APP_PrintFrame("rx", frame, bytesReceived);
@@ -403,16 +442,6 @@ void LORA_APP_Tasks(void)
     else
     {
         LORA_APP_PrintRejectedLength(bytesReceived);
-    }
-
-    event.type = NODE_STATE_EVENT_FRAME_RECEIVED;
-    event.frame = frame;
-    event.frame_length = bytesReceived;
-    event.tick_ms = appTickMs;
-    if (!NODE_STATE_HandleEvent(&nodeContext, &event, &action))
-    {
-        LORA_APP_Print("error: state rejected RX event\r\n");
-        return;
     }
 
     if (action.ignore_reason != NODE_STATE_IGNORE_NONE)

@@ -148,6 +148,8 @@ void SYS_Initialize ( void* data )
 
     SERCOM5_USART_Initialize();
 
+    RTC_Initialize();
+
 
     NVIC_Initialize();
 

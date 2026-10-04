@@ -1,20 +1,26 @@
 /*******************************************************************************
-  NVIC PLIB Implementation
+  Power Manager(PM) PLIB
 
-  Company:
+  Company
     Microchip Technology Inc.
 
-  File Name:
-    plib_nvic.c
+  File Name
+    plib_pm.h
 
-  Summary:
-    NVIC PLIB Source File
+  Summary
+    PM PLIB Header File.
 
-  Description:
-    None
+  Description
+    This file defines the interface to the PM peripheral library. This
+    library provides access to and control of the associated peripheral
+    instance.
+
+  Remarks:
+    None.
 
 *******************************************************************************/
 
+// DOM-IGNORE-BEGIN
 /*******************************************************************************
 * Copyright (C) 2018 Microchip Technology Inc. and its subsidiaries.
 *
@@ -37,87 +43,62 @@
 * ANY WAY RELATED TO THIS SOFTWARE WILL NOT EXCEED THE AMOUNT OF FEES, IF ANY,
 * THAT YOU HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
 *******************************************************************************/
+// DOM-IGNORE-END
 
-#include "device.h"
-#include "plib_nvic.h"
-
+#ifndef PLIB_PM_H    // Guards against multiple inclusion
+#define PLIB_PM_H
 
 // *****************************************************************************
 // *****************************************************************************
-// Section: NVIC Implementation
+// Section: Included Files
+// *****************************************************************************
+// *****************************************************************************
+/* This section lists the other files that are included in this file.
+*/
+
+#include <stdbool.h>
+#include <stddef.h>
+
+// DOM-IGNORE-BEGIN
+#ifdef __cplusplus // Provide C++ Compatibility
+
+    extern "C" {
+
+#endif
+// DOM-IGNORE-END
+
+// *****************************************************************************
+// *****************************************************************************
+// Section: Data Types
+// *****************************************************************************
+
+#define PM_RESET_CAUSE_POR_RESET  PM_RCAUSE_POR_Msk
+#define PM_RESET_CAUSE_BOD12_RESET  PM_RCAUSE_BOD12_Msk
+#define PM_RESET_CAUSE_BOD33_RESET  PM_RCAUSE_BOD33_Msk
+#define PM_RESET_CAUSE_EXT_RESET  PM_RCAUSE_EXT_Msk
+#define PM_RESET_CAUSE_WDT_RESET  PM_RCAUSE_WDT_Msk
+#define PM_RESET_CAUSE_SYST_RESET  PM_RCAUSE_SYST_Msk
+
+typedef uint8_t PM_RESET_CAUSE;
+
+// *****************************************************************************
+// *****************************************************************************
+// Section: Interface Routines
 // *****************************************************************************
 // *****************************************************************************
 
-void NVIC_Initialize( void )
-{
+void PM_IdleModeEnter( void );
 
-    /* Enable NVIC Controller */
-    __DMB();
-    __enable_irq();
+void PM_StandbyModeEnter( void );
 
-    /* Enable the interrupt sources and configure the priorities as configured
-     * from within the "Interrupt Manager" of MHC. */
-    NVIC_SetPriority(RTC_IRQn, 3);
-    NVIC_EnableIRQ(RTC_IRQn);
-    NVIC_SetPriority(SERCOM1_IRQn, 3);
-    NVIC_EnableIRQ(SERCOM1_IRQn);
-    NVIC_SetPriority(SERCOM5_IRQn, 3);
-    NVIC_EnableIRQ(SERCOM5_IRQn);
+PM_RESET_CAUSE PM_ResetCauseGet( void );
 
+// DOM-IGNORE-BEGIN
+#ifdef __cplusplus  // Provide C++ Compatibility
 
-
-
-}
-
-void NVIC_INT_Enable( void )
-{
-    __DMB();
-    __enable_irq();
-}
-
-bool NVIC_INT_Disable( void )
-{
-    bool processorStatus = (__get_PRIMASK() == 0U);
-
-    __disable_irq();
-    __DMB();
-
-    return processorStatus;
-}
-
-void NVIC_INT_Restore( bool state )
-{
-    if( state == true )
-    {
-        __DMB();
-        __enable_irq();
-    }
-    else
-    {
-        __disable_irq();
-        __DMB();
-    }
-}
-
-bool NVIC_INT_SourceDisable( IRQn_Type source )
-{
-    bool processorStatus;
-    bool intSrcStatus;
-
-    processorStatus = NVIC_INT_Disable();
-    intSrcStatus = (NVIC_GetEnableIRQ(source) != 0U);
-    NVIC_DisableIRQ( source );
-    NVIC_INT_Restore( processorStatus );
-
-    /* return the source status */
-    return intSrcStatus;
-}
-
-void NVIC_INT_SourceRestore( IRQn_Type source, bool status )
-{
-    if( status ) {
-       NVIC_EnableIRQ( source );
     }
 
-    return;
-}
+#endif
+// DOM-IGNORE-END
+
+#endif /* PLIB_PM_H */

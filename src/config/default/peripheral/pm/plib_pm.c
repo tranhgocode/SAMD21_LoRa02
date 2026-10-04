@@ -1,20 +1,26 @@
 /*******************************************************************************
-  NVIC PLIB Implementation
+  Power Manager(PM) PLIB
 
-  Company:
+  Company
     Microchip Technology Inc.
 
-  File Name:
-    plib_nvic.c
+  File Name
+    plib_pm.c
 
-  Summary:
-    NVIC PLIB Source File
+  Summary
+    PM PLIB Implementation File.
 
-  Description:
-    None
+  Description
+    This file defines the interface to the PM peripheral library. This
+    library provides access to and control of the associated peripheral
+    instance.
+
+  Remarks:
+    None.
 
 *******************************************************************************/
 
+// DOM-IGNORE-BEGIN
 /*******************************************************************************
 * Copyright (C) 2018 Microchip Technology Inc. and its subsidiaries.
 *
@@ -37,87 +43,38 @@
 * ANY WAY RELATED TO THIS SOFTWARE WILL NOT EXCEED THE AMOUNT OF FEES, IF ANY,
 * THAT YOU HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
 *******************************************************************************/
+// DOM-IGNORE-END
+
+// *****************************************************************************
+// *****************************************************************************
+// Section: Included Files
+// *****************************************************************************
+// *****************************************************************************
+/* This section lists the other files that are included in this file.
+*/
 
 #include "device.h"
-#include "plib_nvic.h"
+#include "plib_pm.h"
 
-
-// *****************************************************************************
-// *****************************************************************************
-// Section: NVIC Implementation
-// *****************************************************************************
-// *****************************************************************************
-
-void NVIC_Initialize( void )
+void PM_IdleModeEnter( void )
 {
-
-    /* Enable NVIC Controller */
-    __DMB();
-    __enable_irq();
-
-    /* Enable the interrupt sources and configure the priorities as configured
-     * from within the "Interrupt Manager" of MHC. */
-    NVIC_SetPriority(RTC_IRQn, 3);
-    NVIC_EnableIRQ(RTC_IRQn);
-    NVIC_SetPriority(SERCOM1_IRQn, 3);
-    NVIC_EnableIRQ(SERCOM1_IRQn);
-    NVIC_SetPriority(SERCOM5_IRQn, 3);
-    NVIC_EnableIRQ(SERCOM5_IRQn);
-
-
-
-
+    /* Configure Idle Sleep mode */
+    SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
+    PM_REGS->PM_SLEEP = PM_SLEEP_IDLE(0U);
+    /* Wait for interrupt instruction execution */
+    __WFI();
 }
 
-void NVIC_INT_Enable( void )
+void PM_StandbyModeEnter( void )
 {
-    __DMB();
-    __enable_irq();
+    /* Configure Standby Sleep */
+    SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+    /* Wait for interrupt instruction execution */
+    __WFI();
 }
 
-bool NVIC_INT_Disable( void )
+PM_RESET_CAUSE PM_ResetCauseGet( void )
 {
-    bool processorStatus = (__get_PRIMASK() == 0U);
-
-    __disable_irq();
-    __DMB();
-
-    return processorStatus;
+    return (PM_RESET_CAUSE) PM_REGS->PM_RCAUSE;
 }
 
-void NVIC_INT_Restore( bool state )
-{
-    if( state == true )
-    {
-        __DMB();
-        __enable_irq();
-    }
-    else
-    {
-        __disable_irq();
-        __DMB();
-    }
-}
-
-bool NVIC_INT_SourceDisable( IRQn_Type source )
-{
-    bool processorStatus;
-    bool intSrcStatus;
-
-    processorStatus = NVIC_INT_Disable();
-    intSrcStatus = (NVIC_GetEnableIRQ(source) != 0U);
-    NVIC_DisableIRQ( source );
-    NVIC_INT_Restore( processorStatus );
-
-    /* return the source status */
-    return intSrcStatus;
-}
-
-void NVIC_INT_SourceRestore( IRQn_Type source, bool status )
-{
-    if( status ) {
-       NVIC_EnableIRQ( source );
-    }
-
-    return;
-}

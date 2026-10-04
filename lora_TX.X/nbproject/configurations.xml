@@ -24,8 +24,14 @@
             <logicalFolder name="nvmctrl" displayName="nvmctrl" projectFiles="true">
               <itemPath>../src/config/default/peripheral/nvmctrl/plib_nvmctrl.h</itemPath>
             </logicalFolder>
+            <logicalFolder name="pm" displayName="pm" projectFiles="true">
+              <itemPath>../src/config/default/peripheral/pm/plib_pm.h</itemPath>
+            </logicalFolder>
             <logicalFolder name="port" displayName="port" projectFiles="true">
               <itemPath>../src/config/default/peripheral/port/plib_port.h</itemPath>
+            </logicalFolder>
+            <logicalFolder name="rtc" displayName="rtc" projectFiles="true">
+              <itemPath>../src/config/default/peripheral/rtc/plib_rtc.h</itemPath>
             </logicalFolder>
             <logicalFolder name="sercom" displayName="sercom" projectFiles="true">
               <logicalFolder name="spi_master" displayName="spi_master" projectFiles="true">
@@ -153,11 +159,13 @@
                      projectFiles="true">
         <logicalFolder name="components" displayName="components" projectFiles="true">
           <itemPath>lora_TX_default/components/sercom5.yml</itemPath>
+          <itemPath>lora_TX_default/components/rtc.yml</itemPath>
           <itemPath>lora_TX_default/components/evsys.yml</itemPath>
           <itemPath>lora_TX_default/components/cmsis.yml</itemPath>
           <itemPath>lora_TX_default/components/nvmctrl.yml</itemPath>
           <itemPath>lora_TX_default/components/core.yml</itemPath>
           <itemPath>lora_TX_default/components/dfp.yml</itemPath>
+          <itemPath>lora_TX_default/components/pm.yml</itemPath>
           <itemPath>lora_TX_default/components/sercom1.yml</itemPath>
         </logicalFolder>
         <itemPath>lora_TX_default/mcc-config.mc4</itemPath>
@@ -185,6 +193,7 @@
         <itemPath>../src/app/lora_app.c</itemPath>
         <itemPath>../src/app/node_response.c</itemPath>
         <itemPath>../src/app/node_state.c</itemPath>
+        <itemPath>../src/app/app_time.h</itemPath>
       </logicalFolder>
       <logicalFolder name="config" displayName="config" projectFiles="true">
         <logicalFolder name="default" displayName="default" projectFiles="true">
@@ -201,8 +210,14 @@
             <logicalFolder name="nvmctrl" displayName="nvmctrl" projectFiles="true">
               <itemPath>../src/config/default/peripheral/nvmctrl/plib_nvmctrl.c</itemPath>
             </logicalFolder>
+            <logicalFolder name="pm" displayName="pm" projectFiles="true">
+              <itemPath>../src/config/default/peripheral/pm/plib_pm.c</itemPath>
+            </logicalFolder>
             <logicalFolder name="port" displayName="port" projectFiles="true">
               <itemPath>../src/config/default/peripheral/port/plib_port.c</itemPath>
+            </logicalFolder>
+            <logicalFolder name="rtc" displayName="rtc" projectFiles="true">
+              <itemPath>../src/config/default/peripheral/rtc/plib_rtc_timer.c</itemPath>
             </logicalFolder>
             <logicalFolder name="sercom" displayName="sercom" projectFiles="true">
               <logicalFolder name="spi_master" displayName="spi_master" projectFiles="true">

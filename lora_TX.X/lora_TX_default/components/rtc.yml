@@ -141,7 +141,7 @@ data:
       children:
       - children:
         - attributes:
-            value: '512'
+            value: '61440'
           type: User
         type: Values
       type: Hex

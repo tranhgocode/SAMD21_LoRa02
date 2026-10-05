@@ -31,4 +31,7 @@ tests/
 .DS_Store
 Thumbs.db
 AGENTS.md
-Docs/
+/Docs/*
+
+# Documentation and build artifacts
+!Docs/config_MCC.md

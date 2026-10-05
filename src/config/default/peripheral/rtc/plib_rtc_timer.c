@@ -75,7 +75,7 @@ void RTC_Initialize(void)
    }
 
    /* Writing to COMP register will trigger write-synchronization */
-   RTC_REGS->MODE0.RTC_COMP = 0x200U;
+   RTC_REGS->MODE0.RTC_COMP = 0xf000U;
    while((RTC_REGS->MODE0.RTC_STATUS & RTC_STATUS_SYNCBUSY_Msk) == RTC_STATUS_SYNCBUSY_Msk)
    {
        /* Wait for Write-Synchronization */

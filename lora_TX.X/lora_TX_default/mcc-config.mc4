@@ -18,7 +18,7 @@ generatedFileHashHistoryMap:
 - file: ..\src\config\default\ATSAMD21G17D.ld
   hash: 7e0eb71e6ea398d4f53a60b94f380eca07993db6cdd2df3bec1be3583efd8f2c
 - file: ..\src\config\default\definitions.h
-  hash: 4e1ff55b8d14f48ba65d7204f2e42462b7f7b235502200561914f89249e4e071
+  hash: b79c89eb2301a0c0ad4cdd60f74e9d5653848278847723e8120c258d7ce90d86
 - file: ..\src\config\default\device.h
   hash: 4c6af204f483a01e96c46e0fa31c2d030cd380e5ea80291a1758514d6687bbee
 - file: ..\src\config\default\device_cache.h
@@ -36,7 +36,7 @@ generatedFileHashHistoryMap:
 - file: ..\src\config\default\libc_syscalls.c
   hash: c9afc1b1257829415a1a6746ce3744f0a768b339d59fff2ab3ca1fab58b2a916
 - file: ..\src\config\default\peripheral\clock\plib_clock.c
-  hash: 6e6b2a6ce9ad09ced9cefe7896462eba03e4f66e651c0f4cca7200492e924f28
+  hash: 52867984bab9d24ee3dc0e40b2ad09c3136d3bba7e7c7f9a0d3c8e5ffa681962
 - file: ..\src\config\default\peripheral\clock\plib_clock.h
   hash: 99bff84fe4a99e6423e2d28f881600300ece34a505bb89f3b4eb61154dbeeb10
 - file: ..\src\config\default\peripheral\evsys\plib_evsys.c
@@ -60,9 +60,9 @@ generatedFileHashHistoryMap:
 - file: ..\src\config\default\peripheral\port\plib_port.h
   hash: 091cb10370c5b9c8903bebee59c106f060e1a09e572ef61f3369036433686d91
 - file: ..\src\config\default\peripheral\rtc\plib_rtc.h
-  hash: 224971ecf35af126c6b757213ae80660ef7603a66a27dc25b2ab0cbbf379edcf
+  hash: d2457589d2143cfb37806d3f8ed30477aaa584300c1fb9e856f57698f632271e
 - file: ..\src\config\default\peripheral\rtc\plib_rtc_timer.c
-  hash: 967d2e4e039a479c68d403db6b0c5971e0f914cde363c1ee9d39d2fee68fb3a8
+  hash: 8806352e22e8a5b7143acc9569bcb75158d5e9c4178cf50054e5f8dd6ae3e92e
 - file: ..\src\config\default\peripheral\sercom\spi_master\plib_sercom1_spi_master.c
   hash: 466acc8218e804082b7bb003fa76deaf280cadfc0f0c724ab38429ff41cca77c
 - file: ..\src\config\default\peripheral\sercom\spi_master\plib_sercom1_spi_master.h

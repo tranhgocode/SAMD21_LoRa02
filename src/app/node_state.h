@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "app_config.h"
 #include "protocol/node_packet.h"
 
 #ifdef __cplusplus
@@ -18,10 +19,10 @@ extern "C"
 #endif
 
 /** Maximum time to wait for a matching ACK after a successful transmission. */
-#define NODE_STATE_ACK_TIMEOUT_MS 1000U
+#define NODE_STATE_ACK_TIMEOUT_MS APP_CONFIG_ACK_TIMEOUT_MS
 
 /** RTC sleep interval after initialization or the end of each cycle. */
-#define NODE_STATE_INTERVAL_MS 5000U
+#define NODE_STATE_INTERVAL_MS APP_CONFIG_SLEEP_INTERVAL_MS
 
     /** States in one node response transaction. */
     typedef enum

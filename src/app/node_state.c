@@ -84,7 +84,7 @@ static void NODE_STATE_HandleWaitAck(NODE_STATE_Context *context,
     LORA_PACKET_Message packet;
     uint32_t elapsedMs = event->tick_ms - context->ack_started_tick_ms;
 
-    /* Timeout wins at the exact boundary, so an ACK at 1000 ms is late. */
+    /* Timeout wins at the configured deadline, so an ACK at that time is late. */
     if (elapsedMs >= NODE_STATE_ACK_TIMEOUT_MS)
     {
         NODE_STATE_CompleteTransaction(context,

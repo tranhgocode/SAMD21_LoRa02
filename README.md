@@ -4,10 +4,11 @@
 
 This repository contains firmware for a LoRa sensor node with RTC wakeup
 built with an ATSAMD21G17D, an Ai-Thinker LoRa-02/SX1278, and a DHT11 sensor.
-After initialization, the node sleeps for about 60 seconds, reads DHT11 once, sends one
+After initialization, the node sleeps for the configured interval (5 seconds by
+default), reads DHT11 once, sends one
 `DATA` or `ERROR` packet, immediately arms RX, and waits for a matching `ACK`.
-It ends the cycle on ACK, ACK timeout, or TX failure, then waits another
-60 seconds from the end of the cycle. The SAM D21 enters Standby and the radio
+It ends the cycle on ACK, ACK timeout, or TX failure, then waits for the
+configured interval from the end of the cycle. The SAM D21 enters Standby and the radio
 enters Sleep during this interval. There is no application retry.
 
 This is **MVP3: autonomous uplink with Standby and RTC wakeup**. Software and
@@ -31,14 +32,14 @@ only polls nodes must be updated separately.
 ## Note: Using More Than One Node
 
 Each physical node must use a unique address. Before building firmware for a
-node, change `LORA_APP_NODE_ADDRESS` in `src/app/lora_app.c`:
+node, change `APP_CONFIG_NODE_ADDRESS` in `src/app/app_config.h`:
 
 ```c
 /* Node 1 */
-#define LORA_APP_NODE_ADDRESS 0x01U
+#define APP_CONFIG_NODE_ADDRESS 0x01U
 
 /* Node 2 */
-#define LORA_APP_NODE_ADDRESS 0x02U
+#define APP_CONFIG_NODE_ADDRESS 0x02U
 ```
 
 Build and flash each board separately after selecting its address. Valid node
@@ -47,6 +48,30 @@ is reserved. The gateway must set `Dest` to the intended node address in each
 `ACK`. Rebuilding overwrites the default `.hex` output, so copy or
 rename each image, for example `node_01.hex` and `node_02.hex`, before building
 the next node.
+
+## Application Configuration
+
+Edit `src/app/app_config.h` before building to select the node address, sleep
+interval, transaction timeouts and radio profile. Current defaults are:
+
+| Setting | Default |
+| --- | --- |
+| `APP_CONFIG_NODE_ADDRESS` | `0x02U` |
+| `APP_CONFIG_SLEEP_INTERVAL_MS` | `5000U` (5 seconds) |
+| `APP_CONFIG_TX_TIMEOUT_MS` | `3000U` |
+| `APP_CONFIG_ACK_TIMEOUT_MS` | `1000U` |
+| `APP_CONFIG_FREQUENCY_HZ` | `433000000ULL` (433 MHz) |
+| `APP_CONFIG_RADIO_POWER` | `SX1278_POWER_17DBM` |
+| `APP_CONFIG_RADIO_SF` | `SX1278_LORA_SF_7` |
+| `APP_CONFIG_RADIO_BW` | `SX1278_LORA_BW_125KHZ` |
+| `APP_CONFIG_RADIO_CR` | `SX1278_LORA_CR_4_5` |
+| `APP_CONFIG_RADIO_CRC` | `SX1278_LORA_CRC_EN` |
+
+Radio options use symbolic constants from `SX1278.h`; select a compatible profile
+on the gateway. Interval UART logs use the configured value in milliseconds.
+Register definitions, internal buffers and synchronization limits stay in their
+own modules. Configure RTC/GCLK and pin mappings through MCC; this header does
+not change the generated peripheral configuration.
 
 ## Architecture
 
@@ -73,6 +98,7 @@ flowchart TD
 | --- | --- |
 | `src/main.c` | Initializes Harmony and repeatedly runs the app and `SYS_Tasks()` |
 | `src/app/lora_app.*` | Integrates radio RX/TX, DHT11, UART logging, and timer ticks |
+| `src/app/app_config.h` | Selects node address, sleep interval, timeouts and radio profile |
 | `src/app/node_power.*` | Drains UART/SPI, verifies radio Sleep, arms RTC and enters Standby |
 | `src/app/app_time.h` | Reserves TC4/TC5 for elapsed time while awake |
 | `src/app/node_state.*` | Controls `WAIT_INTERVAL`, `WAIT_TX_RESULT`, and `WAIT_ACK` |
@@ -91,7 +117,7 @@ sequenceDiagram
     participant N as Sensor Node
     participant D as DHT11
 
-    N->>N: Radio Sleep + MCU Standby; RTC wakes after about 60 seconds
+    N->>N: Radio Sleep + MCU Standby; RTC wakes after configured interval
     N->>D: Read temperature and humidity once
     alt Valid sensor sample
         N-->>G: DATA (node ID, current Seq)
@@ -137,7 +163,8 @@ Harmony configuration is unchanged by this implementation. Timer/RF accuracy
 still requires a board test.
 
 `node_power` reserves RTC Mode 0 with GCLK1 from OSCULP32K / 32, DIV1, nominal
-1024 Hz, and compare 61440 (`0xF000`). Each sleep starts from COUNT=0; compare
+1024 Hz. Compare is calculated from `APP_CONFIG_SLEEP_INTERVAL_MS` (5120 ticks
+for the default 5000 ms). Each sleep starts from COUNT=0; compare
 wakeup stops RTC and emits `INTERVAL_ELAPSED` to the state machine. The active
 TC clock is not advanced artificially. Standby preserves RAM, GPIO and peripheral
 configuration; `SYS_Initialize()` is not repeated after wake.
@@ -151,8 +178,9 @@ bus. Fatal power preparation/initialization faults stop sampling and TX until
 reset. Existing generated startup and active radio SPI routines still contain
 unbounded register/transfer waits; this change bounds the power preparation path.
 
-The RTC interval depends on OSCULP32K tolerance, so it does not guarantee exactly
-60.000 seconds. See [MCC configuration](Docs/config_MCC.md) for clock and pin settings.
+The RTC interval depends on OSCULP32K tolerance, so it does not guarantee
+the configured duration exactly. See [MCC configuration](Docs/config_MCC.md)
+for clock and pin settings.
 
 ## Pin Table
 
@@ -220,7 +248,8 @@ wrap, timer conversion, pending/spurious RTC interrupts, preparation faults and
 20 simulated sleep/wake cycles. They compile with `-Wall -Wextra -Werror -pedantic`.
 `make -C tests clean` removes only the named test executables. Tests are portable
 host C; the hardware timer register setup and RF link still need board validation.
-The local harness currently passes 79 tests. `tests/` remains ignored by Git
+The local harness includes a regression check that interval logs match the
+actual sleep duration. `tests/` remains ignored by Git
 under the existing repository policy; these commands require the local harness.
 
 ## Log Output
@@ -230,10 +259,10 @@ Binary packets are logged with an explicit length and hexadecimal bytes.
 The readiness message is:
 
 ```text
-status: sensor node ready, first uplink in 60 seconds
+status: sensor node ready, first uplink in 5000 ms
 ```
 
-Each cycle first logs `status: sleep, RTC wake in 60 seconds`, then
+Each cycle first logs `status: sleep, RTC wake in 5000 ms`, then
 `status: RTC wakeup` and `status: tx len=... hex=...`. Successful TX logs
 `status: RX ready, waiting for ACK`. Terminal outcomes include:
 
@@ -246,7 +275,7 @@ error: LoRa TX failed
 Other diagnostics include DHT11 initialization failure, RX setup failure and
 `status: RX frame ignored`. RX observations are timestamped before UART logging;
 post-TX logs count toward the ACK deadline, and terminal logging finishes before
-the next 60-second interval starts.
+the next configured interval starts.
 
 Host tests and firmware builds do not replace hardware verification. MVP3 still
 requires at least 20 actual sleep/wake cycles without reset or hang, UART evidence

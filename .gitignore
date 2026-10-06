@@ -3,10 +3,12 @@
 **/debug/
 **/dist/
 **/.generated_files/
+**/disassembly/
 
 # MPLAB X user-specific settings
 **/nbproject/private/
 **/nbproject/Makefile-*.mk
+**/nbproject/Makefile-genesis.properties
 **/nbproject/Package-*.bash
 
 # Compiled firmware and intermediate files
@@ -17,6 +19,8 @@
 *.hex
 *.bin
 *.map
+*.dump
+*.inx
 
 # Editor and operating-system files
 .vscode/
@@ -27,6 +31,7 @@ tests/
 *.log
 *.tmp
 *.swp
+*.bak
 *~
 .DS_Store
 Thumbs.db

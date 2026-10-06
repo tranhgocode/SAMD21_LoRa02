@@ -196,6 +196,7 @@
         <itemPath>../src/app/node_state.c</itemPath>
         <itemPath>../src/app/node_power.c</itemPath>
         <itemPath>../src/app/app_time.h</itemPath>
+        <itemPath>../src/app/app_config.h</itemPath>
       </logicalFolder>
       <logicalFolder name="config" displayName="config" projectFiles="true">
         <logicalFolder name="default" displayName="default" projectFiles="true">

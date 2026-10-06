@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "definitions.h"
+#include "app/app_config.h"
 #include "app/node_response.h"
 #include "app/node_state.h"
 #include "app/node_power.h"
@@ -16,11 +17,7 @@
 #include "drivers/sensors/DHT11.h"
 #include "drivers/sx1278/SX1278.h"
 
-// #define LORA_APP_NODE_ADDRESS            0x01U
-#define LORA_APP_NODE_ADDRESS            0x02U                      // address of this sensor node
-#define LORA_APP_FREQUENCY_HZ            433000000ULL
 #define LORA_APP_PACKET_LENGTH           LORA_PACKET_MAX_LENGTH
-#define LORA_APP_TX_TIMEOUT_MS           3000U
 #define LORA_APP_IDLE_DELAY_MS           1U
 #define LORA_APP_SX1278_VERSION_REGISTER 0x42U
 #define LORA_APP_SX1278_EXPECTED_VERSION 0x12U
@@ -108,6 +105,24 @@ static char *LORA_APP_AppendHexByte(char *destination, uint8_t value)
     *destination = hexDigits[value & 0x0FU];
     destination++;
     return destination;
+}
+
+static void LORA_APP_PrintInterval(const char *prefix)
+{
+    char line[80];
+    size_t prefixLength = strlen(prefix);
+    char *cursor;
+
+    /* Reserve ten decimal digits for uint32_t plus the suffix and terminator. */
+    if (prefixLength > (sizeof(line) - 10U - sizeof(" ms\r\n")))
+    {
+        return;
+    }
+    memcpy(line, prefix, prefixLength);
+    cursor = LORA_APP_AppendUnsigned(line + prefixLength,
+                                     APP_CONFIG_SLEEP_INTERVAL_MS);
+    memcpy(cursor, " ms\r\n", sizeof(" ms\r\n"));
+    LORA_APP_Print(line);
 }
 
 static void LORA_APP_PrintFrame(const char *direction,
@@ -251,7 +266,7 @@ static void LORA_APP_BuildAndTransmit(const NODE_STATE_Action *action)
 {
     NODE_RESPONSE_Request request =
     {
-        .node_address = LORA_APP_NODE_ADDRESS,
+        .node_address = APP_CONFIG_NODE_ADDRESS,
         .transaction_id = action->transaction_id,
         .sequence = action->sequence
     };
@@ -279,7 +294,7 @@ static void LORA_APP_BuildAndTransmit(const NODE_STATE_Action *action)
     transmitted = SX1278_transmit(&loraModule,
                                   frame,
                                   (uint8_t)frameLength,
-                                  LORA_APP_TX_TIMEOUT_MS) != 0;
+                                  APP_CONFIG_TX_TIMEOUT_MS) != 0;
     txCompletedTickMs = LORA_APP_TIME_NowMs();
     receiverStarted = false;
     LORA_APP_NotifyTxResult(transmitted, txCompletedTickMs);
@@ -353,8 +368,8 @@ static void LORA_APP_SleepInterval(void)
     NODE_STATE_Action action;
 
     receiverStarted = false;
-    LORA_APP_Print("status: sleep, RTC wake in 60 seconds\r\n");
-    if (!NODE_POWER_Sleep(&loraModule, NODE_STATE_INTERVAL_MS))
+    LORA_APP_PrintInterval("status: sleep, RTC wake in ");
+    if (!NODE_POWER_Sleep(&loraModule, APP_CONFIG_SLEEP_INTERVAL_MS))
     {
         LORA_APP_Print("error: sleep preparation failed; node halted\r\n");
         loraReady = false;
@@ -386,7 +401,7 @@ bool LORA_APP_Initialize(void)
         return false;
     }
 
-    LORA_APP_Print("\r\nstatus: LoRa-02 configuration: 433 MHz, SF7, BW125, CR4/5, CRC enabled\r\n");
+    LORA_APP_Print("\r\nstatus: initializing LoRa-02\r\n");
 
     /* Keep the existing PA00 DHT11 initialization entry point. */
     dht11Ready = DHT11_Init(&dht11,
@@ -398,12 +413,12 @@ bool LORA_APP_Initialize(void)
     }
 
     SX1278_init(&loraModule,
-                LORA_APP_FREQUENCY_HZ,
-                SX1278_POWER_17DBM,
-                SX1278_LORA_SF_7,
-                SX1278_LORA_BW_125KHZ,
-                SX1278_LORA_CR_4_5,
-                SX1278_LORA_CRC_EN,
+                APP_CONFIG_FREQUENCY_HZ,
+                APP_CONFIG_RADIO_POWER,
+                APP_CONFIG_RADIO_SF,
+                APP_CONFIG_RADIO_BW,
+                APP_CONFIG_RADIO_CR,
+                APP_CONFIG_RADIO_CRC,
                 LORA_APP_PACKET_LENGTH);
 
     version = SX1278_SPIRead(&loraModule,
@@ -415,8 +430,8 @@ bool LORA_APP_Initialize(void)
         return false;
     }
 
-    LORA_APP_Print("status: sensor node ready, first uplink in 60 seconds\r\n");
-    if (!NODE_STATE_Initialize(&nodeContext, LORA_APP_NODE_ADDRESS,
+    LORA_APP_PrintInterval("status: sensor node ready, first uplink in ");
+    if (!NODE_STATE_Initialize(&nodeContext, APP_CONFIG_NODE_ADDRESS,
                                LORA_APP_TIME_NowMs()))
     {
         loraReady = false;

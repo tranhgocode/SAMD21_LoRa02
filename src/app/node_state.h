@@ -13,104 +13,108 @@
 #include "protocol/node_packet.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /** Maximum time to wait for a matching ACK after a successful transmission. */
 #define NODE_STATE_ACK_TIMEOUT_MS 1000U
 
-/** Powered idle interval after initialization or the end of each cycle. */
-#define NODE_STATE_INTERVAL_MS 60000U
+/** RTC sleep interval after initialization or the end of each cycle. */
+#define NODE_STATE_INTERVAL_MS 5000U
 
-/** States in one node response transaction. */
-typedef enum
-{
-    NODE_STATE_WAIT_INTERVAL = 0U,
-    NODE_STATE_WAIT_TX_RESULT,
-    NODE_STATE_WAIT_ACK
-} NODE_STATE_State;
+    /** States in one node response transaction. */
+    typedef enum
+    {
+        NODE_STATE_WAIT_INTERVAL = 0U,
+        NODE_STATE_WAIT_TX_RESULT,
+        NODE_STATE_WAIT_ACK
+    } NODE_STATE_State;
 
-/** Events supplied by the radio and timer integration layer. */
-typedef enum
-{
-    NODE_STATE_EVENT_FRAME_RECEIVED = 0U,
-    NODE_STATE_EVENT_TX_SUCCEEDED,
-    NODE_STATE_EVENT_TX_FAILED,
-    NODE_STATE_EVENT_TIMER_TICK
-} NODE_STATE_EventType;
+    /** Events supplied by the radio and timer integration layer. */
+    typedef enum
+    {
+        NODE_STATE_EVENT_FRAME_RECEIVED = 0U,
+        NODE_STATE_EVENT_TX_SUCCEEDED,
+        NODE_STATE_EVENT_TX_FAILED,
+        NODE_STATE_EVENT_TIMER_TICK,
+        /** RTC completed the sleep interval; the active-time counter stops in Standby. */
+        NODE_STATE_EVENT_INTERVAL_ELAPSED
+    } NODE_STATE_EventType;
 
-/** Work requested from the hardware integration layer. */
-typedef enum
-{
-    NODE_STATE_ACTION_NONE = 0U,
-    NODE_STATE_ACTION_READ_SENSOR,
-    NODE_STATE_ACTION_TRANSACTION_COMPLETE,
-    NODE_STATE_ACTION_ACK_TIMEOUT,
-    NODE_STATE_ACTION_TX_FAILED
-} NODE_STATE_ActionType;
+    /** Work requested from the hardware integration layer. */
+    typedef enum
+    {
+        NODE_STATE_ACTION_NONE = 0U,
+        NODE_STATE_ACTION_READ_SENSOR,
+        NODE_STATE_ACTION_TRANSACTION_COMPLETE,
+        NODE_STATE_ACTION_ACK_TIMEOUT,
+        NODE_STATE_ACTION_TX_FAILED
+    } NODE_STATE_ActionType;
 
-/** Diagnostic reason when no hardware action is requested. */
-typedef enum
-{
-    NODE_STATE_IGNORE_NONE = 0U,
-    NODE_STATE_IGNORE_INVALID_PACKET,
-    NODE_STATE_IGNORE_WRONG_DESTINATION,
-    NODE_STATE_IGNORE_UNEXPECTED_TYPE,
-    NODE_STATE_IGNORE_ACK_MISMATCH,
-    NODE_STATE_IGNORE_UNEXPECTED_EVENT
-} NODE_STATE_IgnoreReason;
+    /** Diagnostic reason when no hardware action is requested. */
+    typedef enum
+    {
+        NODE_STATE_IGNORE_NONE = 0U,
+        NODE_STATE_IGNORE_INVALID_PACKET,
+        NODE_STATE_IGNORE_WRONG_DESTINATION,
+        NODE_STATE_IGNORE_UNEXPECTED_TYPE,
+        NODE_STATE_IGNORE_ACK_MISMATCH,
+        NODE_STATE_IGNORE_UNEXPECTED_EVENT
+    } NODE_STATE_IgnoreReason;
 
-/** Input event supplied by the radio integration layer. */
-typedef struct
-{
-    NODE_STATE_EventType type;
-    const uint8_t *frame;
-    size_t frame_length;
-    uint32_t tick_ms;
-} NODE_STATE_Event;
+    /** Input event supplied by the radio integration layer. */
+    typedef struct
+    {
+        NODE_STATE_EventType type;
+        const uint8_t *frame;
+        size_t frame_length;
+        uint32_t tick_ms;
+    } NODE_STATE_Event;
 
-/** Result returned to the hardware integration layer. */
-typedef struct
-{
-    NODE_STATE_ActionType type;
-    NODE_STATE_IgnoreReason ignore_reason;
-    uint8_t transaction_id;
-    uint16_t sequence;
-} NODE_STATE_Action;
+    /** Result returned to the hardware integration layer. */
+    typedef struct
+    {
+        NODE_STATE_ActionType type;
+        NODE_STATE_IgnoreReason ignore_reason;
+        uint8_t transaction_id;
+        uint16_t sequence;
+    } NODE_STATE_Action;
 
-/** Persistent state owned by one sensor node. */
-typedef struct
-{
-    NODE_STATE_State state;
-    uint8_t node_address;
-    uint16_t response_sequence;
-    uint8_t pending_transaction_id;
-    uint16_t pending_sequence;
-    uint32_t ack_started_tick_ms;
-    uint32_t interval_started_tick_ms;
-    uint8_t transaction_id;
-} NODE_STATE_Context;
+    /** Persistent state owned by one sensor node. */
+    typedef struct
+    {
+        NODE_STATE_State state;
+        uint8_t node_address;
+        uint16_t response_sequence;
+        uint8_t pending_transaction_id;
+        uint16_t pending_sequence;
+        uint32_t ack_started_tick_ms;
+        uint32_t interval_started_tick_ms;
+        uint8_t transaction_id;
+    } NODE_STATE_Context;
 
-/**
- * Initialize a node in WAIT_INTERVAL.
- *
- * tick_ms is the real elapsed timestamp at initialization. The first sample
- * starts after NODE_STATE_INTERVAL_MS; ID and Seq begin at zero in RAM.
- */
-bool NODE_STATE_Initialize(NODE_STATE_Context *context,
-                           uint8_t node_address,
-                           uint32_t tick_ms);
+    /**
+     * Initialize a node in WAIT_INTERVAL.
+     *
+     * tick_ms is the active-time timestamp at initialization. The first sample
+     * starts after the powered timer interval or an INTERVAL_ELAPSED RTC wake
+     * event; ID and Seq begin at zero in RAM and survive Standby.
+     */
+    bool NODE_STATE_Initialize(NODE_STATE_Context *context,
+                               uint8_t node_address,
+                               uint32_t tick_ms);
 
-/**
- * Handle one received frame without invoking radio or sensor drivers.
- *
- * A malformed or irrelevant frame is a handled event and returns true with
- * ACTION_NONE plus an ignore reason. False is reserved for invalid API
- * pointers. On false, action remains unchanged.
- */
-bool NODE_STATE_HandleEvent(NODE_STATE_Context *context,
-                            const NODE_STATE_Event *event,
-                            NODE_STATE_Action *action);
+    /**
+     * Handle one received frame without invoking radio or sensor drivers.
+     *
+     * A malformed or irrelevant frame is a handled event and returns true with
+     * ACTION_NONE plus an ignore reason. False is reserved for invalid API
+     * pointers. On false, action remains unchanged.
+     */
+    bool NODE_STATE_HandleEvent(NODE_STATE_Context *context,
+                                const NODE_STATE_Event *event,
+                                NODE_STATE_Action *action);
 
 #ifdef __cplusplus
 }

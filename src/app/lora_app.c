@@ -11,6 +11,7 @@
 #include "definitions.h"
 #include "app/node_response.h"
 #include "app/node_state.h"
+#include "app/node_power.h"
 #include "app/app_time.h"
 #include "drivers/sensors/DHT11.h"
 #include "drivers/sx1278/SX1278.h"
@@ -24,6 +25,7 @@
 #define LORA_APP_SX1278_VERSION_REGISTER 0x42U
 #define LORA_APP_SX1278_EXPECTED_VERSION 0x12U
 #define LORA_APP_FRAME_LOG_CAPACITY      224U
+#define LORA_APP_UART_WAIT_ATTEMPTS      1000000U
 
 static SX1278_hw_t loraHardware;
 static SX1278_t loraModule =
@@ -35,11 +37,14 @@ static NODE_STATE_Context nodeContext;
 static bool loraReady;
 static bool dht11Ready;
 static bool receiverStarted;
+/* Keep the asynchronous UART source valid even if its ISR stops progressing. */
+static char uartLine[LORA_APP_FRAME_LOG_CAPACITY];
 
 
 static void LORA_APP_Print(const char *text)
 {
     size_t length;
+    uint32_t attempts = LORA_APP_UART_WAIT_ATTEMPTS;
 
     if (text == NULL)
     {
@@ -47,14 +52,28 @@ static void LORA_APP_Print(const char *text)
     }
 
     length = strlen(text);
-    while (SERCOM5_USART_WriteIsBusy())
+    if (length >= sizeof(uartLine))
     {
-        /* Wait for the preceding UART message. */
+        return;
     }
-    (void)SERCOM5_USART_Write((void *)text, length);
     while (SERCOM5_USART_WriteIsBusy())
     {
-        /* Keep the source buffer valid until transmission completes. */
+        if (--attempts == 0U)
+        {
+            return;
+        }
+    }
+    memcpy(uartLine, text, length + 1U);
+    if (!SERCOM5_USART_Write(uartLine, length))
+    {
+        return;
+    }
+    while (SERCOM5_USART_WriteIsBusy())
+    {
+        if (--attempts == 0U)
+        {
+            return;
+        }
     }
 }
 
@@ -323,6 +342,32 @@ static void LORA_APP_IdleTick(void)
     }
 }
 
+static void LORA_APP_SleepInterval(void)
+{
+    NODE_STATE_Event event =
+    {
+        .type = NODE_STATE_EVENT_INTERVAL_ELAPSED,
+        .frame = NULL,
+        .frame_length = 0U
+    };
+    NODE_STATE_Action action;
+
+    receiverStarted = false;
+    LORA_APP_Print("status: sleep, RTC wake in 60 seconds\r\n");
+    if (!NODE_POWER_Sleep(&loraModule, NODE_STATE_INTERVAL_MS))
+    {
+        LORA_APP_Print("error: sleep preparation failed; node halted\r\n");
+        loraReady = false;
+        return;
+    }
+    LORA_APP_Print("status: RTC wakeup\r\n");
+    event.tick_ms = LORA_APP_TIME_NowMs();
+    if (NODE_STATE_HandleEvent(&nodeContext, &event, &action))
+    {
+        LORA_APP_HandleAction(&action);
+    }
+}
+
 bool LORA_APP_Initialize(void)
 {
     uint8_t version;
@@ -333,6 +378,11 @@ bool LORA_APP_Initialize(void)
     if (!LORA_APP_TIME_Initialize())
     {
         LORA_APP_Print("error: elapsed timer initialization failed\r\n");
+        return false;
+    }
+    if (!NODE_POWER_Initialize())
+    {
+        LORA_APP_Print("error: RTC power initialization failed\r\n");
         return false;
     }
 
@@ -384,7 +434,19 @@ void LORA_APP_Tasks(void)
 
     if (!loraReady)
     {
-        SX1278_hw_DelayMs(LORA_APP_IDLE_DELAY_MS);
+        /* An unusable RTC/SPI clock must not trigger early TX or a busy loop.
+         * Fatal initialization/sleep preparation faults require a board reset.
+         */
+        NVIC_DisableIRQ(RTC_IRQn);
+        NVIC_DisableIRQ(SERCOM1_IRQn);
+        NVIC_DisableIRQ(SERCOM5_IRQn);
+        PM_StandbyModeEnter();
+        return;
+    }
+
+    if (nodeContext.state == NODE_STATE_WAIT_INTERVAL)
+    {
+        LORA_APP_SleepInterval();
         return;
     }
 

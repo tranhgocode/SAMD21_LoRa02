@@ -2,15 +2,17 @@
 
 ## Overview
 
-This repository contains firmware for a continuously powered LoRa sensor node
+This repository contains firmware for a LoRa sensor node with RTC wakeup
 built with an ATSAMD21G17D, an Ai-Thinker LoRa-02/SX1278, and a DHT11 sensor.
-After initialization, the node waits 60 seconds, reads DHT11 once, sends one
+After initialization, the node sleeps for about 60 seconds, reads DHT11 once, sends one
 `DATA` or `ERROR` packet, immediately arms RX, and waits for a matching `ACK`.
 It ends the cycle on ACK, ACK timeout, or TX failure, then waits another
-60 seconds from the end of the cycle. There is no application retry.
+60 seconds from the end of the cycle. The SAM D21 enters Standby and the radio
+enters Sleep during this interval. There is no application retry.
 
-This is **MVP2: continuously powered autonomous uplink**. It does not enter MCU
-sleep or use RTC wakeup; those belong to MVP3. The legacy `POLL` packet remains
+This is **MVP3: autonomous uplink with Standby and RTC wakeup**. Software and
+host verification are complete; board wake/current acceptance is pending.
+The legacy `POLL` packet remains
 in the wire codec but no longer triggers sampling. A gateway must accept
 unsolicited `DATA`/`ERROR` and echo the node's ID/Seq in its ACK; a gateway that
 only polls nodes must be updated separately.
@@ -20,7 +22,8 @@ only polls nodes must be updated separately.
 - TX uses the existing driver's bounded 3000 ms timeout argument.
 - The node creates an 8-bit ID and a 16-bit Seq in RAM, initially zero. Both
   advance once per finished cycle, including TX failure, and wrap naturally.
-  Reset restarts them; duplicate detection across resets is outside this MVP.
+  Standby retains them. Reset restarts them; duplicate detection across resets
+  is outside this MVP.
 - DATA/ERROR payloads, byte order and CRC-16/CCITT-FALSE remain unchanged.
 - Sensor initialization/read/value failure sends one ERROR and still waits
   for ACK. A local build failure ends the cycle without transmitting.
@@ -61,6 +64,8 @@ flowchart TD
     APP --> DHT[DHT11 driver]
     APP --> RADIO[SX1278 driver]
     APP --> UART[SERCOM5 UART]
+    APP --> POWER[node_power: RTC and Standby]
+    POWER --> PLATFORM
     RADIO --> PLATFORM[SAMD21 SPI and GPIO]
 ```
 
@@ -68,7 +73,8 @@ flowchart TD
 | --- | --- |
 | `src/main.c` | Initializes Harmony and repeatedly runs the app and `SYS_Tasks()` |
 | `src/app/lora_app.*` | Integrates radio RX/TX, DHT11, UART logging, and timer ticks |
-| `src/app/app_time.h` | Reserves TC4/TC5 for a free-running elapsed-time counter |
+| `src/app/node_power.*` | Drains UART/SPI, verifies radio Sleep, arms RTC and enters Standby |
+| `src/app/app_time.h` | Reserves TC4/TC5 for elapsed time while awake |
 | `src/app/node_state.*` | Controls `WAIT_INTERVAL`, `WAIT_TX_RESULT`, and `WAIT_ACK` |
 | `src/app/node_response.*` | Builds `DATA` or `ERROR` responses |
 | `src/protocol/node_packet.*` | Validates, encodes, and decodes V1 packets |
@@ -85,7 +91,7 @@ sequenceDiagram
     participant N as Sensor Node
     participant D as DHT11
 
-    N->>N: Wait 60 seconds; create ID and Seq
+    N->>N: Radio Sleep + MCU Standby; RTC wakes after about 60 seconds
     N->>D: Read temperature and humidity once
     alt Valid sensor sample
         N-->>G: DATA (node ID, current Seq)
@@ -118,8 +124,8 @@ length, Type, address, direction, or CRC causes the packet to be ignored.
 clocked by GCLK0 (48 MHz) with a /1024 prescaler. Continuous synchronized COUNT
 reads and fractional millisecond accumulation count sensor, TX and UART work;
 loop iteration counts do not determine deadlines. SysTick remains available to
-the existing DHT11/radio delay routines. The CPU and radio stay powered during
-`WAIT_INTERVAL`; the application does not poll RX in that state.
+the existing DHT11/radio delay routines. TC4/TC5 stops in Standby and measures
+the ACK deadline only while awake.
 
 The timer follows the [Microchip SAM D21/DA1 datasheet](https://ww1.microchip.com/downloads/aemDocuments/documents/MCU32/ProductDocuments/DataSheets/SAM-D21-DA1-Family-Data-Sheet-DS40001882.pdf)
 TC pairing and READREQ COUNT synchronization contract. Clock/reset/synchronization
@@ -127,7 +133,26 @@ initialization waits are bounded and failure prevents application startup.
 The timebase must be sampled at least once per hardware counter wrap (about
 25 hours); normal operation samples it every application iteration. Timing
 accuracy depends on the existing GCLK0 oscillator configuration. Generated
-Harmony configuration is unchanged. Timer/RF accuracy still requires a board test.
+Harmony configuration is unchanged by this implementation. Timer/RF accuracy
+still requires a board test.
+
+`node_power` reserves RTC Mode 0 with GCLK1 from OSCULP32K / 32, DIV1, nominal
+1024 Hz, and compare 61440 (`0xF000`). Each sleep starts from COUNT=0; compare
+wakeup stops RTC and emits `INTERVAL_ELAPSED` to the state machine. The active
+TC clock is not advanced artificially. Standby preserves RAM, GPIO and peripheral
+configuration; `SYS_Initialize()` is not repeated after wake.
+
+Preparation waits are bounded. UART must finish its final transmitted byte;
+radio Sleep is verified by reading RegOpMode while preserving LoRa/LF bits.
+The final wake-flag check and WFI run with PRIMASK set, which prevents losing a
+compare interrupt just before sleep. Unrelated wakeups do not restart the timer.
+RTC synchronization is checked before register accesses that could stall the
+bus. Fatal power preparation/initialization faults stop sampling and TX until
+reset. Existing generated startup and active radio SPI routines still contain
+unbounded register/transfer waits; this change bounds the power preparation path.
+
+The RTC interval depends on OSCULP32K tolerance, so it does not guarantee exactly
+60.000 seconds. See [MCC configuration](Docs/config_MCC.md) for clock and pin settings.
 
 ## Pin Table
 
@@ -185,13 +210,18 @@ With GNU make and a C11 GCC-compatible compiler on PATH, run from the root:
 ```powershell
 make -C tests test
 make -C tests/packet test
+make -C tests/power test
+make -C tests/radio test
 ```
 
 The suites cover packet/CRC contracts, sensor error responses, autonomous
 scheduling, ACK mismatch and boundary deadlines, TX/RX failure, ID/Seq and time
-wrap, and timer conversion. They compile with `-Wall -Wextra -Werror -pedantic`.
+wrap, timer conversion, pending/spurious RTC interrupts, preparation faults and
+20 simulated sleep/wake cycles. They compile with `-Wall -Wextra -Werror -pedantic`.
 `make -C tests clean` removes only the named test executables. Tests are portable
 host C; the hardware timer register setup and RF link still need board validation.
+The local harness currently passes 79 tests. `tests/` remains ignored by Git
+under the existing repository policy; these commands require the local harness.
 
 ## Log Output
 
@@ -203,7 +233,8 @@ The readiness message is:
 status: sensor node ready, first uplink in 60 seconds
 ```
 
-Each cycle logs `status: tx len=... hex=...`, then successful TX logs
+Each cycle first logs `status: sleep, RTC wake in 60 seconds`, then
+`status: RTC wakeup` and `status: tx len=... hex=...`. Successful TX logs
 `status: RX ready, waiting for ACK`. Terminal outcomes include:
 
 ```text
@@ -217,7 +248,8 @@ Other diagnostics include DHT11 initialization failure, RX setup failure and
 post-TX logs count toward the ACK deadline, and terminal logging finishes before
 the next 60-second interval starts.
 
-Host tests and firmware builds do not replace hardware verification. No hardware
-UART trace has been captured for MVP2. A compatible gateway and two radios are
-required to verify valid/wrong/missing ACKs, sensor/TX errors, actual timing and
-long-running cycles. MCU sleep, RTC wakeup and power measurements remain MVP3.
+Host tests and firmware builds do not replace hardware verification. MVP3 still
+requires at least 20 actual sleep/wake cycles without reset or hang, UART evidence
+with a compatible gateway, and sleep/awake current measurements. COM11 opens at
+115200 baud but produced no data during a 30-second observation of the existing
+board firmware; the new image has not been programmed as part of that observation.

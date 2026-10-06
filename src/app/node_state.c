@@ -32,15 +32,17 @@ static void NODE_STATE_HandleWaitInterval(NODE_STATE_Context *context,
                                           const NODE_STATE_Event *event,
                                           NODE_STATE_Action *action)
 {
-    if (event->type != NODE_STATE_EVENT_TIMER_TICK)
+    if ((event->type != NODE_STATE_EVENT_TIMER_TICK) &&
+        (event->type != NODE_STATE_EVENT_INTERVAL_ELAPSED))
     {
         action->ignore_reason = NODE_STATE_IGNORE_UNEXPECTED_EVENT;
         return;
     }
 
     /* Unsigned elapsed time is valid across the millisecond counter wrap. */
-    if ((event->tick_ms - context->interval_started_tick_ms) <
-        NODE_STATE_INTERVAL_MS)
+    if ((event->type == NODE_STATE_EVENT_TIMER_TICK) &&
+        ((event->tick_ms - context->interval_started_tick_ms) <
+         NODE_STATE_INTERVAL_MS))
     {
         return;
     }
@@ -163,20 +165,20 @@ bool NODE_STATE_HandleEvent(NODE_STATE_Context *context,
 
     switch (context->state)
     {
-        case NODE_STATE_WAIT_INTERVAL:
-            NODE_STATE_HandleWaitInterval(context, event, &nextAction);
-            break;
+    case NODE_STATE_WAIT_INTERVAL:
+        NODE_STATE_HandleWaitInterval(context, event, &nextAction);
+        break;
 
-        case NODE_STATE_WAIT_TX_RESULT:
-            NODE_STATE_HandleWaitTxResult(context, event, &nextAction);
-            break;
+    case NODE_STATE_WAIT_TX_RESULT:
+        NODE_STATE_HandleWaitTxResult(context, event, &nextAction);
+        break;
 
-        case NODE_STATE_WAIT_ACK:
-            NODE_STATE_HandleWaitAck(context, event, &nextAction);
-            break;
+    case NODE_STATE_WAIT_ACK:
+        NODE_STATE_HandleWaitAck(context, event, &nextAction);
+        break;
 
-        default:
-            return false;
+    default:
+        return false;
     }
 
     *action = nextAction;

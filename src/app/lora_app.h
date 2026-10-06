@@ -15,7 +15,7 @@ extern "C" {
 /** Configure and verify the LoRa-02. Returns false on timer or radio initialization failure. */
 bool LORA_APP_Initialize(void);
 
-/** Run one bounded node iteration, then return control to SYS_Tasks(). */
+/** Sleep on RTC or run one transaction iteration, then return to SYS_Tasks(). */
 void LORA_APP_Tasks(void);
 
 #ifdef __cplusplus

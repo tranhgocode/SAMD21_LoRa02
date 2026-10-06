@@ -1,6 +1,6 @@
 # Cấu hình MCC cho node SAM D21 + LoRa-02 + DHT11
 
-Tài liệu hướng dẫn cấu hình toàn bộ clock, pin và ngoại vi đang dùng trong dự án; phần RTC/GCLK1 chuẩn bị cho MVP3 ngủ Standby và đánh thức bằng RTC. Giá trị SPI, UART, GPIO và NVMCTRL được đối chiếu với mã PLIB trên đĩa. Tên tùy chọn có thể khác nhẹ giữa các phiên bản MCC; chọn theo chức năng và kiểm tra mã sau Generate.
+Tài liệu hướng dẫn cấu hình toàn bộ clock, pin và ngoại vi đang dùng trong dự án; RTC/GCLK1 phục vụ MVP3 ngủ Standby và đánh thức bằng RTC. Giá trị SPI, UART, GPIO và NVMCTRL được đối chiếu với mã PLIB trên đĩa. Tên tùy chọn có thể khác nhẹ giữa các phiên bản MCC; chọn theo chức năng và kiểm tra mã sau Generate.
 
 ## 1. Công cụ và trạng thái cấu hình
 
@@ -16,7 +16,7 @@ Tài liệu hướng dẫn cấu hình toàn bộ clock, pin và ngoại vi đan
 
 Manifest của lần Generate trước ghi SAMD21_DFP 3.6.144, trong khi `nbproject/configurations.xml` chọn 3.7.262. Khi mở MCC, kiểm tra pack phù hợp với project hiện có; tránh nâng/hạ package ngoài phạm vi chỉnh clock và ngoại vi. Không nhầm version của package Harmony CMSIS_5 với pack ARM CMSIS trong Project Properties.
 
-**Trạng thái tại lúc viết tài liệu:** cấu hình MCC đã lưu tần số RTC `1024 Hz`, GCLK1 chạy Standby và compare `61440` (`0xF000`). Tuy nhiên, mã sinh trong `src/config/default/` vẫn lấy RTC từ GCLK0 `48 MHz`, compare `0x200`. Cần **Save → Generate → kiểm tra PLIB → Clean and Build** để cấu hình lưu trong MCC có hiệu lực trong firmware.
+**Trạng thái kiểm tra ngày 2026-10-05:** cấu hình MCC và mã sinh trong `src/config/default/` đã khớp: GCLK0/CPU `48 MHz`, GCLK1 từ OSCULP32K chia 32 chạy Standby, RTC `1024 Hz`, compare `61440` (`0xF000`). Firmware đã tích hợp `node_power.c` để vào Standby và thức bằng RTC; build XC32 và 79 host tests đã qua. Ngủ/thức thực tế, thời gian RF và dòng điện cần người dùng tự kiểm chứng trên board.
 
 Nguồn đối chiếu trong repository:
 
@@ -200,7 +200,7 @@ Mã sinh hiện dùng `SERCOM5_USART_INT_BAUD_VALUE = 26`. Nhập tốc độ 11
 
 Terminal trên PC chọn **115200 baud, 8-N-1**, không hardware flow control. Hiện firmware gọi `SERCOM5_USART_Write()` trực tiếp. Không cần thêm SYS_CONSOLE/STDIO; `xc32_monitor.c` hiện chỉ có stub `read()`/`write()` trả về -1, nên không mặc định coi `printf()` đã được nối UART.
 
-Trước khi ngủ, firmware MVP3 cần chờ `SERCOM5_USART_TransmitComplete()` để byte cuối rời chân TX, ngoài kiểm tra `WriteIsBusy()`.
+Trước khi ngủ, `NODE_POWER_Sleep()` chờ cả `SERCOM5_USART_TransmitComplete()` để byte cuối rời chân TX và `WriteIsBusy()`. Các vòng chờ chuẩn bị ngủ có giới hạn; lỗi khiến node ngừng giao dịch, cần reset.
 
 ## 7. RTC: bộ đếm đánh thức MVP3
 
@@ -231,7 +231,7 @@ RTC counter = 1024 / DIV1 = 1024 tick/giây
 Compare = 60 × 1024 = 61440 = 0xF000
 ```
 
-Đây là mốc khoảng 60 giây. Clear-on-match cho phép lặp tự động, nhưng ứng dụng MVP3 phải Stop sau wake, đặt counter về 0 và Start trước lần ngủ kế tiếp để khoảng ngủ tính từ cuối giao dịch. Độ chính xác thực còn phụ thuộc oscillator, đồng bộ/ngắt và trình tự arm timer; không dùng cấu hình này để cam kết chu kỳ tuyệt đối chính xác 60.000 giây.
+Đây là mốc khoảng 60 giây. Clear-on-match cho phép lặp tự động; `node_power.c` dừng RTC sau wake, đặt counter về 0 và bật lại trước lần ngủ kế tiếp để khoảng ngủ tính từ cuối giao dịch. Module kiểm tra đồng bộ trước khi truy cập thanh ghi, dùng vòng chờ có giới hạn thay cho các API Start/Stop chờ vô hạn. Độ chính xác thực còn phụ thuộc oscillator, đồng bộ/ngắt và trình tự arm timer; không dùng cấu hình này để cam kết chu kỳ tuyệt đối chính xác 60.000 giây.
 
 RTC có callback/ngắt compare để báo đến hạn; không cần bật Event Output hoặc EVSYS cho wake bằng ngắt. [Microchip: RTC PLIB và callback](https://onlinedocs.microchip.com/oxy/GUID-450989FA-38E4-4D68-AB61-15ADB29AD718-en-US-6/GUID-42D6CA1F-4B6E-451B-BD1A-ABDC7277EDDF.html)
 
@@ -314,7 +314,7 @@ Hiện không có PLIB TC trong Project Graph. `LORA_APP_TIME_Initialize()` tự
 | Interrupt | Không dùng |
 | Run in Standby | Không bật |
 
-Giữ TC4/TC5 dành riêng cho ứng dụng; không thêm PWM/timer PLIB khác vào cặp này. Bộ đếm hiện tại phục vụ thời gian khi MCU thức; nó không đếm khoảng ngủ Standby. MVP3 phải dùng RTC hoặc cập nhật logic thời gian sau wake, thay vì chỉ thêm lệnh ngủ vào vòng chờ 60 giây.
+Giữ TC4/TC5 dành riêng cho ứng dụng; không thêm PWM/timer PLIB khác vào cặp này. Bộ đếm phục vụ thời gian khi MCU thức, gồm deadline ACK; nó không đếm khoảng ngủ Standby. MVP3 dùng sự kiện `NODE_STATE_EVENT_INTERVAL_ELAPSED` sau RTC wake để bắt đầu giao dịch mới, không cộng giả 60000 ms vào timer TC.
 
 ### 10.2. SysTick
 
@@ -366,3 +366,29 @@ Gateway cần cùng thông số radio. Giữ tên GPIO để các macro `LORA_NS
 MCC có thể sinh thanh ghi bằng số thay vì macro tên. Đối chiếu trong device pack: nguồn OSCULP32K của `GCLK_GENCTRL.SRC` là **3**, DFLL48M là **7**; `GEN(1)` là GCLK1. Kênh GCLK cho RTC là ID **4**, SERCOM1_CORE là **21**, SERCOM5_CORE là **25**. Không đổi nhầm ID kênh với số generator.
 
 Nếu MCC đã hiển thị 1024 Hz nhưng `plib_rtc.h` còn 48000000, hoặc COMP còn `0x200`, cấu hình chưa sinh vào đúng project/configuration. Kiểm tra project đang chọn, Save/Generate và đường dẫn output `src/config/default/`.
+
+## 12. Tự kiểm tra firmware MVP3
+
+Firmware dùng LoRa-02/SX1278, địa chỉ node `0x02`, gateway `0x00`; không thêm retry hoặc thay đổi định dạng gói. Các file tích hợp chính là `src/app/node_power.c`, `src/app/lora_app.c` và `src/app/node_state.c`. MCC không cần Generate lại nếu PLIB đã khớp bảng trên. Module power được thêm vào project MPLAB; khi mở lại project, kiểm tra `node_power.c` nằm trong nhóm Source Files/app.
+
+1. Build configuration `default`, nạp image `lora_TX.X/dist/default/production/lora_TX.X.production.hex` bằng MPLAB X.
+2. Mở COM11 ở **115200, 8-N-1**, không flow control; reset board để thấy log khởi động.
+3. Sau dòng `status: sensor node ready, first uplink in 60 seconds`, kiểm tra `status: sleep, RTC wake in 60 seconds`.
+4. Sau khoảng 60 giây, kiểm tra lần lượt `status: RTC wakeup`, `status: tx len=... hex=...`, `status: RX ready, waiting for ACK`.
+5. Khi gateway chưa chạy, kết quả mong đợi là `status: ACK timeout`, rồi một dòng sleep mới. Không phát lại mẫu vừa gửi. Nếu đọc DHT11 lỗi, node gửi ERROR một lần và vẫn chờ ACK.
+6. Ghi log ít nhất **20 chu kỳ thực**, không reset/treo; mỗi wake chỉ có một dòng TX. ID và Seq bắt đầu từ 0 và tăng một lần sau mỗi lượt hoàn tất. Reset sẽ đưa chúng về 0; Standby giữ chúng trong RAM.
+
+Log luồng không có gateway:
+
+```text
+status: sleep, RTC wake in 60 seconds
+status: RTC wakeup
+status: tx len=... hex=...
+status: RX ready, waiting for ACK
+status: ACK timeout
+status: sleep, RTC wake in 60 seconds
+```
+
+Nếu có `error: RTC power initialization failed` hoặc `error: sleep preparation failed; node halted`, node ngừng gửi và cần reset sau khi kiểm tra clock, ngắt RTC, SPI/UART. Không coi dòng thông báo sleep là bằng chứng đã đạt dòng ngủ thấp. Hiện chưa có gateway chạy hoặc thiết bị đo dòng; phần kiểm chứng ACK thật và dòng lúc ngủ/thức vẫn chưa hoàn thành. MCU và radio được đưa vào chế độ ngủ, còn nguồn DHT11, debugger và các phần khác trên board vẫn được cấp.
+
+Kết quả phần mềm: `make -C tests test` **79 tests PASS**, gồm 20 chu kỳ mô phỏng và các biên ngắt; `make -C lora_TX.X CONF=default build` **PASS**, không có cảnh báo compiler mới. Harness `tests/` hiện vẫn là dữ liệu local bị Git ignore theo quy định đang có. Kiểm thử mô phỏng không thay thế kiểm thử board.

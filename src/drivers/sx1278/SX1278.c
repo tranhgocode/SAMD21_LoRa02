@@ -114,12 +114,17 @@ void SX1278_config(SX1278_t *module) {
 }
 
 void SX1278_standby(SX1278_t *module) {
-	SX1278_SPIWrite(module, LR_RegOpMode, 0x09);
+	/* Preserve LongRangeMode and LowFrequencyModeOn across Sleep/Standby.
+	 * Semtech reference: https://github.com/Lora-net/LoRaMac-node/blob/master/src/radio/sx1276/sx1276.c
+	 */
+	uint8_t mode = SX1278_SPIRead(module, LR_RegOpMode);
+	SX1278_SPIWrite(module, LR_RegOpMode, (uint8_t)((mode & 0xF8U) | 0x01U));
 	module->status = STANDBY;
 }
 
 void SX1278_sleep(SX1278_t *module) {
-	SX1278_SPIWrite(module, LR_RegOpMode, 0x08);
+	uint8_t mode = SX1278_SPIRead(module, LR_RegOpMode);
+	SX1278_SPIWrite(module, LR_RegOpMode, (uint8_t)(mode & 0xF8U));
 	module->status = SLEEP;
 }
 

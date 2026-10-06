@@ -8,6 +8,7 @@
         <itemPath>../src/app/lora_app.h</itemPath>
         <itemPath>../src/app/node_response.h</itemPath>
         <itemPath>../src/app/node_state.h</itemPath>
+        <itemPath>../src/app/node_power.h</itemPath>
       </logicalFolder>
       <logicalFolder name="config" displayName="config" projectFiles="true">
         <logicalFolder name="default" displayName="default" projectFiles="true">
@@ -193,6 +194,7 @@
         <itemPath>../src/app/lora_app.c</itemPath>
         <itemPath>../src/app/node_response.c</itemPath>
         <itemPath>../src/app/node_state.c</itemPath>
+        <itemPath>../src/app/node_power.c</itemPath>
         <itemPath>../src/app/app_time.h</itemPath>
       </logicalFolder>
       <logicalFolder name="config" displayName="config" projectFiles="true">

@@ -10,6 +10,7 @@
 
 #include "definitions.h"
 #include "app/app_config.h"
+#include "app/debug_log.h"
 #include "app/node_response.h"
 #include "app/node_state.h"
 #include "app/node_power.h"
@@ -21,8 +22,6 @@
 #define LORA_APP_IDLE_DELAY_MS           1U
 #define LORA_APP_SX1278_VERSION_REGISTER 0x42U
 #define LORA_APP_SX1278_EXPECTED_VERSION 0x12U
-#define LORA_APP_FRAME_LOG_CAPACITY      224U
-#define LORA_APP_UART_WAIT_ATTEMPTS      1000000U
 
 static SX1278_hw_t loraHardware;
 static SX1278_t loraModule =
@@ -34,46 +33,7 @@ static NODE_STATE_Context nodeContext;
 static bool loraReady;
 static bool dht11Ready;
 static bool receiverStarted;
-/* Keep the asynchronous UART source valid even if its ISR stops progressing. */
-static char uartLine[LORA_APP_FRAME_LOG_CAPACITY];
-
-
-static void LORA_APP_Print(const char *text)
-{
-    size_t length;
-    uint32_t attempts = LORA_APP_UART_WAIT_ATTEMPTS;
-
-    if (text == NULL)
-    {
-        return;
-    }
-
-    length = strlen(text);
-    if (length >= sizeof(uartLine))
-    {
-        return;
-    }
-    while (SERCOM5_USART_WriteIsBusy())
-    {
-        if (--attempts == 0U)
-        {
-            return;
-        }
-    }
-    memcpy(uartLine, text, length + 1U);
-    if (!SERCOM5_USART_Write(uartLine, length))
-    {
-        return;
-    }
-    while (SERCOM5_USART_WriteIsBusy())
-    {
-        if (--attempts == 0U)
-        {
-            return;
-        }
-    }
-}
-
+#if IS_DEBUG
 static char *LORA_APP_AppendUnsigned(char *destination, uint32_t value)
 {
     char reversed[10];
@@ -107,29 +67,11 @@ static char *LORA_APP_AppendHexByte(char *destination, uint8_t value)
     return destination;
 }
 
-static void LORA_APP_PrintInterval(const char *prefix)
-{
-    char line[80];
-    size_t prefixLength = strlen(prefix);
-    char *cursor;
-
-    /* Reserve ten decimal digits for uint32_t plus the suffix and terminator. */
-    if (prefixLength > (sizeof(line) - 10U - sizeof(" ms\r\n")))
-    {
-        return;
-    }
-    memcpy(line, prefix, prefixLength);
-    cursor = LORA_APP_AppendUnsigned(line + prefixLength,
-                                     APP_CONFIG_SLEEP_INTERVAL_MS);
-    memcpy(cursor, " ms\r\n", sizeof(" ms\r\n"));
-    LORA_APP_Print(line);
-}
-
 static void LORA_APP_PrintFrame(const char *direction,
                                 const uint8_t *frame,
                                 size_t frameLength)
 {
-    char line[LORA_APP_FRAME_LOG_CAPACITY];
+    char line[DEBUG_LOG_CAPACITY];
     char *cursor = line;
     size_t directionLength = strlen(direction);
     size_t index;
@@ -155,22 +97,10 @@ static void LORA_APP_PrintFrame(const char *direction,
     }
 
     memcpy(cursor, "\r\n", sizeof("\r\n"));
-    LORA_APP_Print(line);
+    DEBUG_LOG("%s", line);
 }
 
-static void LORA_APP_PrintRejectedLength(size_t frameLength)
-{
-    char line[48];
-    char *cursor = line;
-
-    memcpy(cursor,
-           "error: rejected RX frame len=",
-           sizeof("error: rejected RX frame len=") - 1U);
-    cursor += sizeof("error: rejected RX frame len=") - 1U;
-    cursor = LORA_APP_AppendUnsigned(cursor, (uint32_t)frameLength);
-    memcpy(cursor, "\r\n", sizeof("\r\n"));
-    LORA_APP_Print(line);
-}
+#endif /* IS_DEBUG */
 
 static NODE_RESPONSE_SensorResult LORA_APP_ReadSensor(void)
 {
@@ -221,15 +151,15 @@ static void LORA_APP_LogTerminalAction(const NODE_STATE_Action *action)
     switch (action->type)
     {
         case NODE_STATE_ACTION_TRANSACTION_COMPLETE:
-            LORA_APP_Print("status: ACK accepted\r\n");
+            DEBUG_LOG("status: ACK accepted\r\n");
             break;
 
         case NODE_STATE_ACTION_ACK_TIMEOUT:
-            LORA_APP_Print("status: ACK timeout\r\n");
+            DEBUG_LOG("status: ACK timeout\r\n");
             break;
 
         case NODE_STATE_ACTION_TX_FAILED:
-            LORA_APP_Print("error: LoRa TX failed\r\n");
+            DEBUG_LOG("error: LoRa TX failed\r\n");
             break;
 
         default:
@@ -251,7 +181,7 @@ static void LORA_APP_NotifyTxResult(bool succeeded, uint32_t tickMs)
 
     if (!NODE_STATE_HandleEvent(&nodeContext, &event, &action))
     {
-        LORA_APP_Print("error: state rejected TX result\r\n");
+        DEBUG_LOG("error: state rejected TX result\r\n");
         return;
     }
 
@@ -285,12 +215,14 @@ static void LORA_APP_BuildAndTransmit(const NODE_STATE_Action *action)
     if ((buildResult != NODE_RESPONSE_BUILD_DATA_READY) &&
         (buildResult != NODE_RESPONSE_BUILD_ERROR_READY))
     {
-        LORA_APP_Print("error: response build failed\r\n");
+        DEBUG_LOG("error: response build failed\r\n");
         LORA_APP_NotifyTxResult(false, LORA_APP_TIME_NowMs());
         return;
     }
 
+#if IS_DEBUG
     LORA_APP_PrintFrame("tx", frame, frameLength);
+#endif
     transmitted = SX1278_transmit(&loraModule,
                                   frame,
                                   (uint8_t)frameLength,
@@ -308,11 +240,11 @@ static void LORA_APP_BuildAndTransmit(const NODE_STATE_Action *action)
     {
         if (LORA_APP_StartReceiver())
         {
-            LORA_APP_Print("status: RX ready, waiting for ACK\r\n");
+            DEBUG_LOG("status: RX ready, waiting for ACK\r\n");
         }
         else
         {
-            LORA_APP_Print("error: receiver start failed after TX\r\n");
+            DEBUG_LOG("error: receiver start failed after TX\r\n");
         }
     }
 }
@@ -368,14 +300,15 @@ static void LORA_APP_SleepInterval(void)
     NODE_STATE_Action action;
 
     receiverStarted = false;
-    LORA_APP_PrintInterval("status: sleep, RTC wake in ");
+    DEBUG_LOG("status: sleep, RTC wake in %lu ms\r\n",
+              (unsigned long)APP_CONFIG_SLEEP_INTERVAL_MS);
     if (!NODE_POWER_Sleep(&loraModule, APP_CONFIG_SLEEP_INTERVAL_MS))
     {
-        LORA_APP_Print("error: sleep preparation failed; node halted\r\n");
+        DEBUG_LOG("error: sleep preparation failed; node halted\r\n");
         loraReady = false;
         return;
     }
-    LORA_APP_Print("status: RTC wakeup\r\n");
+    DEBUG_LOG("status: RTC wakeup\r\n");
     event.tick_ms = LORA_APP_TIME_NowMs();
     if (NODE_STATE_HandleEvent(&nodeContext, &event, &action))
     {
@@ -392,16 +325,16 @@ bool LORA_APP_Initialize(void)
     receiverStarted = false;
     if (!LORA_APP_TIME_Initialize())
     {
-        LORA_APP_Print("error: elapsed timer initialization failed\r\n");
+        DEBUG_LOG("error: elapsed timer initialization failed\r\n");
         return false;
     }
     if (!NODE_POWER_Initialize())
     {
-        LORA_APP_Print("error: RTC power initialization failed\r\n");
+        DEBUG_LOG("error: RTC power initialization failed\r\n");
         return false;
     }
 
-    LORA_APP_Print("\r\nstatus: initializing LoRa-02\r\n");
+    DEBUG_LOG("\r\nstatus: initializing LoRa-02\r\n");
 
     /* Keep the existing PA00 DHT11 initialization entry point. */
     dht11Ready = DHT11_Init(&dht11,
@@ -409,7 +342,7 @@ bool LORA_APP_Initialize(void)
                             DHT11_DEFAULT_TIMEOUT);
     if (!dht11Ready)
     {
-        LORA_APP_Print("error: DHT11 initialization failed\r\n");
+        DEBUG_LOG("error: DHT11 initialization failed\r\n");
     }
 
     SX1278_init(&loraModule,
@@ -426,11 +359,12 @@ bool LORA_APP_Initialize(void)
     loraReady = (version == LORA_APP_SX1278_EXPECTED_VERSION);
     if (!loraReady)
     {
-        LORA_APP_Print("error: SX1278 was not detected; check power and SPI wiring\r\n");
+        DEBUG_LOG("error: SX1278 was not detected; check power and SPI wiring\r\n");
         return false;
     }
 
-    LORA_APP_PrintInterval("status: sensor node ready, first uplink in ");
+    DEBUG_LOG("status: sensor node ready, first uplink in %lu ms\r\n",
+              (unsigned long)APP_CONFIG_SLEEP_INTERVAL_MS);
     if (!NODE_STATE_Initialize(&nodeContext, APP_CONFIG_NODE_ADDRESS,
                                LORA_APP_TIME_NowMs()))
     {
@@ -487,7 +421,7 @@ void LORA_APP_Tasks(void)
     {
         if (!LORA_APP_StartReceiver())
         {
-            LORA_APP_Print("error: receiver start failed\r\n");
+            DEBUG_LOG("error: receiver start failed\r\n");
             LORA_APP_IdleTick();
             return;
         }
@@ -508,22 +442,26 @@ void LORA_APP_Tasks(void)
     event.frame_length = bytesReceived;
     if (!NODE_STATE_HandleEvent(&nodeContext, &event, &action))
     {
-        LORA_APP_Print("error: state rejected RX event\r\n");
+        DEBUG_LOG("error: state rejected RX event\r\n");
         return;
     }
 
+#if IS_DEBUG
     if (bytesReceived <= LORA_PACKET_MAX_LENGTH)
     {
         LORA_APP_PrintFrame("rx", frame, bytesReceived);
     }
     else
     {
-        LORA_APP_PrintRejectedLength(bytesReceived);
+        DEBUG_LOG("error: rejected RX frame len=%lu\r\n",
+                  (unsigned long)bytesReceived);
     }
+
+#endif /* IS_DEBUG */
 
     if (action.ignore_reason != NODE_STATE_IGNORE_NONE)
     {
-        LORA_APP_Print("status: RX frame ignored\r\n");
+        DEBUG_LOG("status: RX frame ignored\r\n");
     }
     LORA_APP_HandleAction(&action);
 }

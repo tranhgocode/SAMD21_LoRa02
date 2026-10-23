@@ -254,6 +254,12 @@ under the existing repository policy; these commands require the local harness.
 
 ## Log Output
 
+All firmware logs use `DEBUG_LOG(...)` from `src/app/debug_log.h` with
+`printf` formatting, for example `DEBUG_LOG("status: value=%u\r\n", value)`.
+The backend sends through SERCOM5 UART. `IS_DEBUG` defaults to `1` in that
+header; change it to `0` or build with `-DIS_DEBUG=0` to disable all logs.
+Disabled log arguments are not evaluated, and packet log formatting is omitted.
+
 UART lines start with `status:` for normal events or `error:` for failures.
 Binary packets are logged with an explicit length and hexadecimal bytes.
 The readiness message is:
